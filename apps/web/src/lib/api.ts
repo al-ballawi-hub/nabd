@@ -27,7 +27,11 @@ export function apiFetch(
   const headers = new Headers(init.headers);
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  if (
+    init.body !== undefined &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
   return fetch(path, { ...init, headers });

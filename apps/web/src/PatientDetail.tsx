@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import FamilyTree from "./components/FamilyTree";
 import TopNav from "./components/TopNav";
@@ -53,6 +53,9 @@ export default function PatientDetail() {
 
   const [text, setText] = useState("");
   const [safetyWarnings, setSafetyWarnings] = useState<string[]>([]);
+  const [ocrUploading, setOcrUploading] = useState(false);
+  const [ocrError, setOcrError] = useState("");
+  const [ocrFileName, setOcrFileName] = useState<string | null>(null);
 
   const patientQuery = useQuery({
     queryKey: ["patient", id],
@@ -95,6 +98,38 @@ export default function PatientDetail() {
   const handleAnalyze = (override = false) => {
     if (!text.trim()) return;
     analyzeMutation.mutate({ text, override });
+  };
+
+  const handleOcrUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      setOcrError("Only PNG and JPEG images are supported.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setOcrError("File exceeds the 10 MB limit.");
+      return;
+    }
+    setOcrUploading(true);
+    setOcrError("");
+    setOcrFileName(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const r = await apiFetch(`/api/v1/patients/${id}/records/ocr`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!r.ok) throw new Error("OCR failed");
+      const data = (await r.json()) as { extractedText: string };
+      setText(data.extractedText);
+      setOcrFileName(file.name);
+    } catch {
+      setOcrError("Failed to extract text from the image.");
+    } finally {
+      setOcrUploading(false);
+    }
   };
 
   const patient = patientQuery.data;
@@ -214,16 +249,39 @@ export default function PatientDetail() {
             {isDoctor && (
               <div className="mb-8 rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
                 <h2 className="text-lg font-bold text-teal-700">
-                  Direct AI Text Analysis
+                  AI Record Analysis
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Paste clinical notes and the AI agent will analyze, classify
-                  and summarize them into a structured record.
+                  Upload a scanned record (PNG/JPEG) to extract its text, then
+                  review and edit it before submitting for AI analysis.
                 </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50 active:scale-95">
+                    {ocrUploading ? "Extracting…" : "Upload Scanned Record"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={handleOcrUpload}
+                      disabled={ocrUploading}
+                    />
+                  </label>
+                  {ocrFileName && (
+                    <span className="text-sm text-slate-600">
+                      Extracted from{" "}
+                      <span className="font-semibold">{ocrFileName}</span>
+                    </span>
+                  )}
+                </div>
+                {ocrError && (
+                  <p className="mt-2 text-sm text-red-600">{ocrError}</p>
+                )}
+
                 <textarea
                   className="mt-3 w-full rounded-2xl border border-teal-200 bg-white/70 p-3 text-slate-800 focus:border-teal-500 focus:outline-none"
                   rows={4}
-                  placeholder="Paste medical report notes here…"
+                  placeholder="Extracted text appears here for review and editing…"
                   value={text}
                   maxLength={MAX_TEXT_LENGTH}
                   onChange={(e) => setText(e.target.value)}
