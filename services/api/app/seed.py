@@ -1,4 +1,4 @@
-"""بيانات تجريبية وهمية بالكامل — للاختبار فقط."""
+"""Completely fictional seed data — for testing only."""
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -7,72 +7,72 @@ from app import models
 
 PATIENTS = [
     {
-        "name": "أحمد محمد العتيبي",
-        "age": 54, "gender": "ذكر", "blood_type": "O+",
-        "allergies": "بنسلين",
-        "chronic_conditions": "سكري نوع 2, ضغط دم مرتفع",
+        "name": "Ahmed Mohammed Al-Otaibi",
+        "age": 54, "gender": "Male", "blood_type": "O+",
+        "allergies": "Penicillin",
+        "chronic_conditions": "Type 2 Diabetes, Hypertension",
     },
     {
-        "name": "نورة سعد القحطاني",
-        "age": 41, "gender": "أنثى", "blood_type": "A+",
-        "allergies": "لا يوجد",
-        "chronic_conditions": "ربو",
+        "name": "Noura Saad Al-Qahtani",
+        "age": 41, "gender": "Female", "blood_type": "A+",
+        "allergies": "None",
+        "chronic_conditions": "Asthma",
     },
     {
-        "name": "خالد عبدالله الدوسري",
-        "age": 67, "gender": "ذكر", "blood_type": "B+",
-        "allergies": "أسبرين, مكسرات",
-        "chronic_conditions": "قصور في القلب, سكري نوع 2",
+        "name": "Khalid Abdullah Al-Dosari",
+        "age": 67, "gender": "Male", "blood_type": "B+",
+        "allergies": "Aspirin, Nuts",
+        "chronic_conditions": "Heart Failure, Type 2 Diabetes",
     },
     {
-        "name": "سارة فيصل الحربي",
-        "age": 29, "gender": "أنثى", "blood_type": "AB+",
-        "allergies": "لا يوجد",
-        "chronic_conditions": "لا يوجد",
+        "name": "Sara Faisal Al-Harbi",
+        "age": 29, "gender": "Female", "blood_type": "AB+",
+        "allergies": "None",
+        "chronic_conditions": "None",
     },
     {
-        "name": "محمد علي الغامدي",
-        "age": 73, "gender": "ذكر", "blood_type": "O-",
-        "allergies": "مضادات الالتهاب",
-        "chronic_conditions": "ضغط دم مرتفع, خشونة مفاصل",
+        "name": "Mohammed Ali Al-Ghamdi",
+        "age": 73, "gender": "Male", "blood_type": "O-",
+        "allergies": "NSAIDs",
+        "chronic_conditions": "Hypertension, Osteoarthritis",
     },
 ]
 
-# سجلات: اسم المريض -> قائمة سجلاته
+# Records: patient name -> list of their records
 RECORDS = {
-    "أحمد محمد العتيبي": [
-        {"record_type": "lab", "title": "تحليل سكر تراكمي HbA1c",
-         "content": "النتيجة: 8.4% — أعلى من الطبيعي (4-5.6%)، يشير إلى ضعف السيطرة على السكري.",
+    "Ahmed Mohammed Al-Otaibi": [
+        {"record_type": "lab", "title": "HbA1c Glycated Hemoglobin",
+         "content": "Result: 8.4% — above the normal range (4-5.6%), indicating poor glycemic control.",
          "source": "manual", "record_date": date(2026, 7, 15)},
-        {"record_type": "prescription", "title": "وصفة: ميتفورمين 850 مجم",
-         "content": "قرص بعد الغداء والعشاء يوميًا. تحذير: راقب وظائف الكلى.",
+        {"record_type": "prescription", "title": "Prescription: Metformin 850 mg",
+         "content": "One tablet after lunch and dinner daily. Caution: monitor renal function.",
          "source": "manual", "record_date": date(2026, 7, 15)},
-        {"record_type": "report", "title": "تقرير أشعة صدر",
-         "content": "لا توجد مؤشرات التهاب رئوي. القلب بحجم طبيعي.",
+        {"record_type": "report", "title": "Chest X-Ray Report",
+         "content": "No signs of pneumonia. Normal cardiac silhouette.",
          "source": "ocr", "record_date": date(2025, 11, 3)},
     ],
-    "خالد عبدالله الدوسري": [
-        {"record_type": "prescription", "title": "وصفة: وارفارين 5 مجم",
-         "content": "قرص يوميًا مساءً. مضاد تجلط — يتعارض مع الأسبرين.",
+    "Khalid Abdullah Al-Dosari": [
+        {"record_type": "prescription", "title": "Prescription: Warfarin 5 mg",
+         "content": "One tablet daily in the evening. Anticoagulant — interacts with aspirin.",
          "source": "manual", "record_date": date(2026, 8, 2)},
-        {"record_type": "report", "title": "تقرير قسم القلب",
-         "content": "ضعف بسيط في عضلة القلب، الكسر القذفي 45%. يُنصح بمتابعة كل 3 أشهر.",
+        {"record_type": "report", "title": "Cardiology Report",
+         "content": "Mild cardiac muscle weakness, ejection fraction 45%. Follow-up recommended every 3 months.",
          "source": "manual", "record_date": date(2026, 8, 2)},
-        {"record_type": "lab", "title": "تحليل وظائف كلى",
-         "content": "الكرياتينين 1.3 ملغ/ديسيلتر — ضمن الحدود الحدّية.",
+        {"record_type": "lab", "title": "Renal Function Panel",
+         "content": "Creatinine 1.3 mg/dL — borderline within normal limits.",
          "source": "manual", "record_date": date(2026, 5, 20)},
     ],
-    "نورة سعد القحطاني": [
-        {"record_type": "prescription", "title": "وصفة: سالبيوتامول بخاخ",
-         "content": "عند الحاجة عند الشعور بضيق التنفس. بحد أقصى 8 مرات يوميًا.",
+    "Noura Saad Al-Qahtani": [
+        {"record_type": "prescription", "title": "Prescription: Salbutamol Inhaler",
+         "content": "Use as needed for shortness of breath. Maximum 8 inhalations daily.",
          "source": "manual", "record_date": date(2026, 6, 10)},
     ],
-    "محمد علي الغامدي": [
-        {"record_type": "prescription", "title": "وصفة: أملوديبين 5 مجم",
-         "content": "قرص صباحًا يوميًا لضغط الدم.",
+    "Mohammed Ali Al-Ghamdi": [
+        {"record_type": "prescription", "title": "Prescription: Amlodipine 5 mg",
+         "content": "One tablet each morning for blood pressure.",
          "source": "manual", "record_date": date(2026, 8, 25)},
-        {"record_type": "lab", "title": "تحليل ضغط وسكري",
-         "content": "الضغط 150/95 ملم زئبق — أعلى من المستهدف. السكر التراكمي 7.1%.",
+        {"record_type": "lab", "title": "Blood Pressure & Glucose Panel",
+         "content": "Blood pressure 150/95 mmHg — above target. HbA1c 7.1%.",
          "source": "manual", "record_date": date(2026, 8, 25)},
     ],
 }
@@ -80,7 +80,7 @@ RECORDS = {
 
 def run_seed(db: Session) -> dict:
     if db.query(models.Patient).count() > 0:
-        return {"message": "البيانات التجريبية موجودة مسبقًا", "seeded": False}
+        return {"message": "Demo data already exists", "seeded": False}
 
     for p in PATIENTS:
         patient = models.Patient(**p)
@@ -91,7 +91,7 @@ def run_seed(db: Session) -> dict:
 
     db.commit()
     return {
-        "message": "تم توليد بيانات تجريبية (وهمية بالكامل)",
+        "message": "Demo data generated (completely fictional)",
         "seeded": True,
         "patients": len(PATIENTS),
         "records": sum(len(v) for v in RECORDS.values()),

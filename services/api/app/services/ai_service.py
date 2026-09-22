@@ -21,20 +21,20 @@ _SYSTEM_PROMPT = (
 
 def _mock_analysis(text: str) -> dict:
     """Deterministic fallback used when no DeepSeek API key is configured."""
-    t = text.strip()
-    if any(k in t for k in ("تحليل", "مختبر", "سكر", "دم", "hba1c", "كرياتينين")):
+    t = text.lower()
+    if any(k in t for k in ("lab", "blood", "glucose", "hba1c", "creatinine", "cbc", "hemoglobin")):
         record_type = "lab"
-    elif any(k in t for k in ("وصفة", "دواء", "علاج", "جرعة", "قرص")):
+    elif any(k in t for k in ("prescrib", "dose", " mg", "tablet", "medication", "drug", "inhaler")):
         record_type = "prescription"
-    elif any(k in t for k in ("أشعة", "تصوير", "scan", "x-ray", "ct", "mri")):
+    elif any(k in t for k in ("scan", "x-ray", " ct", "mri", "imaging", "radiology", "ultrasound")):
         record_type = "scan"
     else:
         record_type = "report"
 
     return {
-        "title": "ملخص نص طبي (محاكاة)",
+        "title": "Medical Note Summary (Mock)",
         "record_type": record_type,
-        "content": t[:300],
+        "content": text.strip()[:300],
     }
 
 
@@ -60,12 +60,12 @@ def analyze_medical_text(text: str) -> dict:
     )
 
     user_prompt = (
-        "حلّل النص الطبي التالي وأعد النتيجة بصيغة JSON فقط (بدون أي نص إضافي) "
-        "بالمفاتيح التالية:\n"
-        '- "title": عنوان مختصر بالعربية\n'
-        '- "record_type": قيمة واحدة فقط من: lab, prescription, report, scan\n'
-        '- "content": ملخص طبي موجز بالعربية\n\n'
-        f"النص الطبي:\n{text}"
+        "Analyze the following medical text and respond with JSON only "
+        "(no extra text) using these keys:\n"
+        '- "title": a short title in English\n'
+        '- "record_type": exactly one of: lab, prescription, report, scan\n'
+        '- "content": a concise medical summary in English\n\n'
+        f"Medical text:\n{text}"
     )
 
     resp = client.chat.completions.create(
@@ -85,7 +85,7 @@ def analyze_medical_text(text: str) -> dict:
         record_type = "report"
 
     return {
-        "title": data.get("title") or "ملخص طبي",
+        "title": data.get("title") or "Medical Note",
         "record_type": record_type,
         "content": data.get("content") or "",
     }

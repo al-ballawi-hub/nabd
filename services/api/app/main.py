@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.db import get_db, init_db
 from app.seed import run_seed
 from app.services.ai_service import analyze_medical_text
+from app.services.safety_service import check_record_safety
 
 
 @asynccontextmanager
@@ -48,7 +49,7 @@ def list_patients(db: Session = Depends(get_db)):
 def get_patient(patient_id: int, db: Session = Depends(get_db)):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
-        raise HTTPException(status_code=404, detail="المريض غير موجود")
+        raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
 
@@ -63,19 +64,19 @@ def get_records(patient_id: int, db: Session = Depends(get_db)):
 
 @app.post(
     "/api/v1/patients/{patient_id}/records/text",
-    response_model=schemas.RecordOut,
-    status_code=201,
+    response_model=schemas.RecordTextResult,
 )
 def create_record_from_text(
     patient_id: int,
     payload: schemas.RecordTextIn,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     patient = (
         db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     )
     if not patient:
-        raise HTTPException(status_code=404, detail="المريض غير موجود")
+        raise HTTPException(status_code=404, detail="Patient not found")
 
     try:
         # PRIVACY: raw medical text is passed to the AI service but never logged.
@@ -83,8 +84,21 @@ def create_record_from_text(
     except Exception as exc:
         raise HTTPException(
             status_code=502,
-            detail="تعذر تحليل النص — فشل الاتصال بخدمة الذكاء الاصطناعي",
+            detail="Text analysis failed — AI service unavailable",
         ) from exc
+
+    # PRIVACY: safety check reads the patient profile but never logs it.
+    warnings = check_record_safety(patient, payload.text, analysis["content"])
+
+    if warnings and not payload.override:
+        response.status_code = status.HTTP_200_OK
+        return schemas.RecordTextResult(
+            saved=False,
+            warnings=warnings,
+            record_type=analysis["record_type"],
+            title=analysis["title"],
+            content=analysis["content"],
+        )
 
     record = models.MedicalRecord(
         patient_id=patient_id,
@@ -97,4 +111,12 @@ def create_record_from_text(
     db.add(record)
     db.commit()
     db.refresh(record)
-    return record
+
+    response.status_code = status.HTTP_201_CREATED
+    return schemas.RecordTextResult(
+        saved=True,
+        warnings=warnings,
+        record_type=record.record_type,
+        title=record.title,
+        content=record.content,
+    )

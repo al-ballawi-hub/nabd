@@ -14,11 +14,31 @@ def test_create_record_from_text(client):
     client.post("/api/v1/seed")
     resp = client.post(
         "/api/v1/patients/1/records/text",
-        json={"text": "تحليل سكر تراكمي HbA1c النتيجة 7.5%"},
+        json={"text": "Patient presents with headache. Prescribed Amlodipine 5mg daily."},
     )
     assert resp.status_code == 201
     data = resp.json()
+    assert data["saved"] is True
+    assert data["warnings"] == []
     assert data["recordType"] in {"lab", "prescription", "report", "scan"}
-    assert data["source"] == "manual"
-    assert data["title"]
-    assert data["content"]
+
+
+def test_record_text_safety_guardrail(client):
+    client.post("/api/v1/seed")
+    # Patient 1 has a Penicillin allergy — the submission is blocked.
+    blocked = client.post(
+        "/api/v1/patients/1/records/text",
+        json={"text": "Prescribed Penicillin 500mg for bacterial infection."},
+    )
+    assert blocked.status_code == 200
+    data = blocked.json()
+    assert data["saved"] is False
+    assert any("Penicillin" in w for w in data["warnings"])
+
+    # Override & approve saves the record.
+    saved = client.post(
+        "/api/v1/patients/1/records/text",
+        json={"text": "Prescribed Penicillin 500mg for bacterial infection.", "override": True},
+    )
+    assert saved.status_code == 201
+    assert saved.json()["saved"] is True

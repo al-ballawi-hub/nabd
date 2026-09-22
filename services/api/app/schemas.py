@@ -36,3 +36,14 @@ class RecordOut(ORMModel):
 
 class RecordTextIn(BaseModel):
     text: str
+    override: bool = False
+
+
+class RecordTextResult(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    saved: bool
+    warnings: list[str]
+    record_type: str
+    title: str
+    content: str
