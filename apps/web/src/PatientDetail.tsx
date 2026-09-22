@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import ActiveMedications from "./components/ActiveMedications";
 import FamilyTree from "./components/FamilyTree";
 import TopNav from "./components/TopNav";
 import TopRisks from "./components/TopRisks";
 import { useAuth } from "./context/auth";
-import { apiFetch, type Page } from "./lib/api";
+import { apiFetch, type ConflictItem, type Page } from "./lib/api";
 
 type Patient = {
   id: number;
@@ -30,7 +31,7 @@ type MedicalRecord = {
 
 type AnalysisResult = {
   saved: boolean;
-  warnings: string[];
+  conflicts: ConflictItem[];
   recordType: string;
   title: string;
   content: string;
@@ -43,6 +44,19 @@ const RECORD_TYPES: Record<string, { label: string; className: string }> = {
   scan: { label: "Imaging / Scan", className: "bg-red-100 text-red-800" },
 };
 
+const SEVERITY_STYLES: Record<string, string> = {
+  high: "bg-red-100 text-red-700",
+  moderate: "bg-amber-100 text-amber-700",
+  low: "bg-emerald-100 text-emerald-700",
+};
+
+const CONFLICT_TYPE_LABELS: Record<string, string> = {
+  "drug-drug": "Drug-Drug",
+  "drug-disease": "Drug-Disease",
+  allergy: "Allergy",
+  duplicate: "Duplicate",
+};
+
 const MAX_TEXT_LENGTH = 5000;
 
 export default function PatientDetail() {
@@ -52,7 +66,7 @@ export default function PatientDetail() {
   const queryClient = useQueryClient();
 
   const [text, setText] = useState("");
-  const [safetyWarnings, setSafetyWarnings] = useState<string[]>([]);
+  const [safetyWarnings, setSafetyWarnings] = useState<ConflictItem[]>([]);
   const [ocrUploading, setOcrUploading] = useState(false);
   const [ocrError, setOcrError] = useState("");
   const [ocrFileName, setOcrFileName] = useState<string | null>(null);
@@ -89,8 +103,10 @@ export default function PatientDetail() {
         setText("");
         setSafetyWarnings([]);
         queryClient.invalidateQueries({ queryKey: ["records", id] });
+        queryClient.invalidateQueries({ queryKey: ["medications", id] });
+        queryClient.invalidateQueries({ queryKey: ["risks", id] });
       } else {
-        setSafetyWarnings(result.warnings ?? []);
+        setSafetyWarnings(result.conflicts ?? []);
       }
     },
   });
@@ -211,6 +227,10 @@ export default function PatientDetail() {
               <TopRisks patientId={id!} />
             </div>
 
+            <div className="mb-8">
+              <ActiveMedications patientId={id!} />
+            </div>
+
             {safetyWarnings.length > 0 && (
               <div className="warning-glow mb-8 rounded-3xl border border-red-300/60 bg-red-50/95 p-6 backdrop-blur-md">
                 <div className="flex items-center gap-2">
@@ -223,9 +243,27 @@ export default function PatientDetail() {
                   This record triggers the following concerns against the
                   patient's profile:
                 </p>
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-red-700">
+                <ul className="mt-3 space-y-2">
                   {safetyWarnings.map((w) => (
-                    <li key={w}>{w}</li>
+                    <li
+                      key={w.type + w.message}
+                      className="flex items-start gap-2 text-sm text-red-700"
+                    >
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase ${
+                          SEVERITY_STYLES[w.severity] ??
+                          "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {w.severity}
+                      </span>
+                      <span>
+                        <span className="font-semibold">
+                          {CONFLICT_TYPE_LABELS[w.type] ?? w.type}:
+                        </span>{" "}
+                        {w.message}
+                      </span>
+                    </li>
                   ))}
                 </ul>
                 <div className="mt-4 flex flex-wrap gap-3">

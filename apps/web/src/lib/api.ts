@@ -9,6 +9,12 @@ export type Page<T> = {
   offset: number;
 };
 
+export type ConflictItem = {
+  severity: "high" | "moderate" | "low";
+  type: "drug-drug" | "drug-disease" | "allergy" | "duplicate";
+  message: string;
+};
+
 export function getToken(): string | null {
   try {
     const saved = localStorage.getItem(SESSION_STORAGE_KEY);

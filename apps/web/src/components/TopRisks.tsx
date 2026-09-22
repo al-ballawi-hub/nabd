@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "../lib/api";
+import { apiFetch, type ConflictItem } from "../lib/api";
 
 type RiskItem = {
   title: string;
@@ -10,6 +10,8 @@ type RiskItem = {
 type RiskSummary = {
   chronicConditions: string[];
   allergies: string[];
+  activeMedications: string[];
+  drugWarnings: ConflictItem[];
   abnormalLabs: RiskItem[];
   hereditaryRisks: string[];
   riskLevel: string;
@@ -19,6 +21,19 @@ const LEVEL_STYLES: Record<string, string> = {
   high: "bg-red-100 text-red-700",
   moderate: "bg-amber-100 text-amber-700",
   low: "bg-emerald-100 text-emerald-700",
+};
+
+const SEVERITY_STYLES: Record<string, string> = {
+  high: "bg-red-100 text-red-700",
+  moderate: "bg-amber-100 text-amber-700",
+  low: "bg-emerald-100 text-emerald-700",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  "drug-drug": "Drug-Drug",
+  "drug-disease": "Drug-Disease",
+  allergy: "Allergy",
+  duplicate: "Duplicate",
 };
 
 export default function TopRisks({ patientId }: { patientId: string }) {
@@ -60,6 +75,56 @@ export default function TopRisks({ patientId }: { patientId: string }) {
       </div>
 
       <div className="mt-4 space-y-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+            Active Medications
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {risks.activeMedications.length === 0 ? (
+              <span className="text-sm text-slate-500">None reported</span>
+            ) : (
+              risks.activeMedications.map((m) => (
+                <span
+                  key={m}
+                  className="rounded-full bg-teal-100 px-3 py-0.5 text-xs font-medium text-teal-800"
+                >
+                  {m}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        {risks.drugWarnings.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+              Drug Warnings
+            </p>
+            <ul className="mt-1.5 space-y-2">
+              {risks.drugWarnings.map((w) => (
+                <li
+                  key={w.type + w.message}
+                  className="flex items-start gap-2 text-sm text-slate-700"
+                >
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase ${
+                      SEVERITY_STYLES[w.severity] ?? "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {w.severity}
+                  </span>
+                  <span>
+                    <span className="font-semibold">
+                      {TYPE_LABELS[w.type] ?? w.type}:
+                    </span>{" "}
+                    {w.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
             Chronic Conditions
