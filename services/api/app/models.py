@@ -12,7 +12,7 @@ from sqlalchemy.orm import relationship
 
 from app.db import Base
 
-# Many-to-many association tables (normalized — no comma-separated strings).
+# Many-to-many association tables (fully normalized — no comma-separated strings).
 patient_allergies = Table(
     "patient_allergies",
     Base.metadata,
@@ -37,6 +37,23 @@ patient_conditions = Table(
         "patient_id",
         Integer,
         ForeignKey("patients.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "condition_id",
+        Integer,
+        ForeignKey("conditions.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+family_member_conditions = Table(
+    "family_member_conditions",
+    Base.metadata,
+    Column(
+        "family_member_id",
+        Integer,
+        ForeignKey("family_members.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     Column(
@@ -85,6 +102,11 @@ class Condition(Base):
     patients = relationship(
         "Patient", secondary=patient_conditions, back_populates="chronic_conditions"
     )
+    family_members = relationship(
+        "FamilyMember",
+        secondary=family_member_conditions,
+        back_populates="conditions",
+    )
 
 
 class MedicalRecord(Base):
@@ -122,4 +144,9 @@ class FamilyMember(Base):
     gender = Column(String(10))
     age = Column(Integer)
     deceased = Column(Boolean, default=False)
-    conditions = Column(Text, default="")
+
+    conditions = relationship(
+        "Condition",
+        secondary=family_member_conditions,
+        back_populates="family_members",
+    )

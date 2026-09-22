@@ -6,8 +6,6 @@ findings and hereditary (family) history into a single executive summary.
 
 from app import models
 
-_EMPTY_VALUES = {"none", "n/a", "no known"}
-
 ABNORMAL_MARKERS = (
     "above", "high", "elevated", "abnormal", "outside", "positive",
     "poor", "weakness", "borderline", "indicating", "poorly",
@@ -17,14 +15,6 @@ HEREDITARY_FLAG_CONDITIONS = (
     "diabetes", "hypertension", "cancer", "heart", "cardiac", "coronary",
     "stroke", "asthma", "alzheimer", "parkinson", "thyroid",
 )
-
-
-def _split(value: str | None) -> list[str]:
-    return [
-        item.strip()
-        for item in (value or "").split(",")
-        if item.strip() and item.strip().lower() not in _EMPTY_VALUES
-    ]
 
 
 def _is_abnormal(content: str) -> bool:
@@ -52,11 +42,11 @@ def summarize_risks(
 
     hereditary_risks = []
     for member in family:
-        for condition in _split(member.conditions):
-            if any(flag in condition.lower() for flag in HEREDITARY_FLAG_CONDITIONS):
+        for condition in member.conditions:
+            if any(flag in condition.name.lower() for flag in HEREDITARY_FLAG_CONDITIONS):
                 status = "deceased" if member.deceased else "living"
                 hereditary_risks.append(
-                    f"{member.relation.title()}: {condition} ({status})"
+                    f"{member.relation.title()}: {condition.name} ({status})"
                 )
 
     score = (

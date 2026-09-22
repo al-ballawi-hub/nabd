@@ -45,13 +45,32 @@ def list_family(
     return items, total
 
 
+def _get_or_create_condition(db: Session, name: str) -> models.Condition:
+    condition = db.query(models.Condition).filter(models.Condition.name == name).first()
+    if not condition:
+        condition = models.Condition(name=name)
+        db.add(condition)
+        db.flush()
+    return condition
+
+
 def add_family_member(
     db: Session, patient_id: int, payload: schemas.FamilyMemberIn
 ) -> models.FamilyMember:
     get_patient(db, patient_id)
-    member = models.FamilyMember(patient_id=patient_id, **payload.model_dump())
+    member = models.FamilyMember(
+        patient_id=patient_id,
+        relation=payload.relation,
+        name=payload.name,
+        gender=payload.gender,
+        age=payload.age,
+        deceased=payload.deceased,
+    )
     try:
         db.add(member)
+        db.flush()
+        for name in payload.conditions:
+            member.conditions.append(_get_or_create_condition(db, name))
         db.commit()
         db.refresh(member)
     except Exception as exc:

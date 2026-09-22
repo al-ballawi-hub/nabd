@@ -11,7 +11,7 @@ type FamilyMember = {
   gender: string | null;
   age: number | null;
   deceased: boolean;
-  conditions: string;
+  conditions: string[];
 };
 
 const HEREDITARY_FLAGS = [
@@ -28,12 +28,8 @@ const HEREDITARY_FLAGS = [
   "thyroid",
 ];
 
-const split = (s: string) =>
-  s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => x.toLowerCase() !== "none");
+const isHereditary = (condition: string) =>
+  HEREDITARY_FLAGS.some((flag) => condition.toLowerCase().includes(flag));
 
 export default function FamilyTree({ patientId }: { patientId: string }) {
   const { user } = useAuth();
@@ -57,7 +53,7 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
     mutationFn: async (vars: {
       relation: string;
       name: string;
-      conditions: string;
+      conditions: string[];
     }) => {
       const r = await apiFetch(`/api/v1/patients/${patientId}/family`, {
         method: "POST",
@@ -76,7 +72,11 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
   const addMember = (e: FormEvent) => {
     e.preventDefault();
     if (!relation.trim()) return;
-    addMutation.mutate({ relation, name, conditions });
+    const conditionList = conditions
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    addMutation.mutate({ relation, name, conditions: conditionList });
   };
 
   const members = data?.items ?? [];
@@ -84,7 +84,9 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
   return (
     <div className="rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
       <h2 className="text-lg font-bold text-slate-800">Family Medical History</h2>
-      {isError && <p className="mt-2 text-red-600">Unable to load family history.</p>}
+      {isError && (
+        <p className="mt-2 text-red-600">Unable to load family history.</p>
+      )}
       {isLoading && <p className="mt-2 text-slate-600">Loading…</p>}
 
       {!isLoading && !isError && members.length === 0 && (
@@ -92,51 +94,43 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
       )}
 
       <div className="mt-3 space-y-3">
-        {members.map((m) => {
-          const flagged = split(m.conditions).filter((c) =>
-            HEREDITARY_FLAGS.some((flag) => c.toLowerCase().includes(flag))
-          );
-          return (
-            <div
-              key={m.id}
-              className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-white/70 p-4"
-            >
-              <div>
-                <p className="font-semibold text-slate-800">
-                  {m.relation.charAt(0).toUpperCase() + m.relation.slice(1)}
-                  {m.name ? ` — ${m.name}` : ""}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {m.gender ? `${m.gender}` : ""}
-                  {m.age != null ? ` · ${m.age} yrs` : ""}
-                  {m.deceased ? " · Deceased" : ""}
-                </p>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {split(m.conditions).length === 0 ? (
-                    <span className="text-xs text-slate-500">No conditions</span>
-                  ) : (
-                    split(m.conditions).map((c) => (
-                      <span
-                        key={c}
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          HEREDITARY_FLAGS.some((f) => c.toLowerCase().includes(f))
-                            ? "bg-red-100 text-red-700"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {flagged.length > 0 &&
-                        HEREDITARY_FLAGS.some((f) => c.toLowerCase().includes(f))
-                          ? "⚠️ "
-                          : ""}
-                        {c}
-                      </span>
-                    ))
-                  )}
-                </div>
+        {members.map((m) => (
+          <div
+            key={m.id}
+            className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-white/70 p-4"
+          >
+            <div>
+              <p className="font-semibold text-slate-800">
+                {m.relation.charAt(0).toUpperCase() + m.relation.slice(1)}
+                {m.name ? ` — ${m.name}` : ""}
+              </p>
+              <p className="text-xs text-slate-500">
+                {m.gender ? `${m.gender}` : ""}
+                {m.age != null ? ` · ${m.age} yrs` : ""}
+                {m.deceased ? " · Deceased" : ""}
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {m.conditions.length === 0 ? (
+                  <span className="text-xs text-slate-500">No conditions</span>
+                ) : (
+                  m.conditions.map((c) => (
+                    <span
+                      key={c}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        isHereditary(c)
+                          ? "bg-red-100 text-red-700"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {isHereditary(c) ? "⚠️ " : ""}
+                      {c}
+                    </span>
+                  ))
+                )}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {isDoctor && (

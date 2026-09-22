@@ -127,11 +127,14 @@ def test_family_tree(client, doctor_headers):
     members = body["items"]
     assert isinstance(members, list)
     assert len(members) >= 1
+    # Conditions are a normalized list, not a comma-separated string.
+    assert isinstance(members[0]["conditions"], list)
 
     add = client.post(
         "/api/v1/patients/1/family",
-        json={"relation": "sister", "name": "Test Sister", "conditions": ""},
+        json={"relation": "sister", "name": "Test Sister", "conditions": ["Asthma"]},
         headers=doctor_headers,
     )
     assert add.status_code == 201
     assert add.json()["relation"] == "sister"
+    assert add.json()["conditions"] == ["Asthma"]

@@ -88,19 +88,19 @@ RECORDS = {
 FAMILY = {
     "Ahmed Mohammed Al-Otaibi": [
         {"relation": "father", "name": "Mohammed Al-Otaibi", "gender": "Male",
-         "age": 78, "deceased": True, "conditions": "Type 2 Diabetes, Coronary Artery Disease"},
+         "age": 78, "deceased": True, "conditions": ["Type 2 Diabetes", "Coronary Artery Disease"]},
         {"relation": "mother", "name": "Fatimah Al-Otaibi", "gender": "Female",
-         "age": 72, "deceased": False, "conditions": "Hypertension"},
+         "age": 72, "deceased": False, "conditions": ["Hypertension"]},
     ],
     "Khalid Abdullah Al-Dosari": [
         {"relation": "father", "name": "Abdullah Al-Dosari", "gender": "Male",
-         "age": 81, "deceased": True, "conditions": "Heart Failure, Coronary Artery Disease"},
+         "age": 81, "deceased": True, "conditions": ["Heart Failure", "Coronary Artery Disease"]},
         {"relation": "brother", "name": "Fahad Al-Dosari", "gender": "Male",
-         "age": 60, "deceased": False, "conditions": "Type 2 Diabetes"},
+         "age": 60, "deceased": False, "conditions": ["Type 2 Diabetes"]},
     ],
     "Noura Saad Al-Qahtani": [
         {"relation": "mother", "name": "Aisha Al-Qahtani", "gender": "Female",
-         "age": 68, "deceased": False, "conditions": "Asthma"},
+         "age": 68, "deceased": False, "conditions": ["Asthma"]},
     ],
 }
 
@@ -136,7 +136,18 @@ def run_seed(db: Session) -> dict:
         for r in RECORDS.get(p["name"], []):
             db.add(models.MedicalRecord(patient_id=patient.id, **r))
         for f in FAMILY.get(p["name"], []):
-            db.add(models.FamilyMember(patient_id=patient.id, **f))
+            member = models.FamilyMember(
+                patient_id=patient.id,
+                relation=f["relation"],
+                name=f.get("name"),
+                gender=f.get("gender"),
+                age=f.get("age"),
+                deceased=f.get("deceased", False),
+            )
+            db.add(member)
+            db.flush()
+            for name in f["conditions"]:
+                member.conditions.append(_get_or_create(db, models.Condition, name))
 
     try:
         db.commit()

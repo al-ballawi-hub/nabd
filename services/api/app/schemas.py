@@ -87,7 +87,14 @@ class FamilyMemberOut(ORMModel):
     gender: str | None
     age: int | None
     deceased: bool
-    conditions: str
+    conditions: list[str]
+
+    @field_validator("conditions", mode="before")
+    @classmethod
+    def _to_names(cls, value):
+        if isinstance(value, list):
+            return [getattr(x, "name", x) for x in value]
+        return value
 
 
 class FamilyMemberIn(BaseModel):
@@ -96,7 +103,7 @@ class FamilyMemberIn(BaseModel):
     gender: str | None = Field(default=None, max_length=10)
     age: int | None = None
     deceased: bool = False
-    conditions: str = Field(default="", max_length=500)
+    conditions: list[str] = Field(default_factory=list)
 
 
 class RiskItem(BaseModel):
