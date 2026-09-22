@@ -57,6 +57,12 @@ class RecordTextIn(BaseModel):
     override: bool = False
 
 
+class OcrExtractResult(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    extracted_text: str
+
+
 class RecordTextResult(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

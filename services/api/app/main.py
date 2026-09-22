@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Query, Response, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, get_current_user, require_doctor
 from app.db import get_db, init_db
 from app.seed import run_seed
-from app.services import patient_service, record_service
+from app.services import ocr_service, patient_service, record_service
 
 
 @asynccontextmanager
@@ -106,6 +106,43 @@ def create_record_from_text(
         status.HTTP_201_CREATED if saved else status.HTTP_200_OK
     )
     return schemas.RecordTextResult(**result)
+
+
+_ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg"}
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post(
+    "/api/v1/patients/{patient_id}/records/ocr",
+    response_model=schemas.OcrExtractResult,
+)
+def extract_record_text(
+    patient_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_doctor),
+):
+    patient_service.get_patient(db, patient_id)  # 404 if missing
+
+    if file.content_type not in _ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=415, detail="Only PNG and JPEG images are supported"
+        )
+
+    contents = file.file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(contents) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413, detail="File exceeds the 10 MB limit"
+        )
+
+    try:
+        text = ocr_service.extract_text(contents)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return schemas.OcrExtractResult(extracted_text=text)
 
 
 @app.get("/api/v1/patients/{patient_id}/risks", response_model=schemas.RiskSummary)
