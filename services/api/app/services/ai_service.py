@@ -10,6 +10,7 @@ retried with exponential backoff for rate limits and transient failures.
 
 import json
 import re
+from typing import Any
 
 from openai import (
     APIConnectionError,
@@ -86,7 +87,7 @@ def _extract_json(raw: str) -> dict:
     stop=stop_after_attempt(3),
     reraise=True,
 )
-def _call_deepseek(client: OpenAI, model: str, messages: list[dict]) -> object:
+def _call_deepseek(client: OpenAI, model: str, messages: list[dict]) -> Any:
     return client.chat.completions.create(
         model=model,
         messages=messages,

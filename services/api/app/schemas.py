@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -36,9 +36,9 @@ class RecordOut(ORMModel):
 
 
 class RecordTextIn(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=5000)
     override: bool = False
-    created_by: str | None = None
+    created_by: str | None = Field(default=None, max_length=120)
 
 
 class RecordTextResult(BaseModel):
