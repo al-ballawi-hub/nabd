@@ -32,3 +32,7 @@ class RecordOut(ORMModel):
     content: str
     source: str
     record_date: date | None
+
+
+class RecordTextIn(BaseModel):
+    text: str

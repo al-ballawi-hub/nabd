@@ -4,3 +4,4 @@ sqlalchemy>=2.0.41
 pydantic>=2.11
 pydantic-settings>=2.9
 python-multipart>=0.0.20
+openai>=1.0

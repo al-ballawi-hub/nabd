@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 type Patient = {
@@ -36,6 +36,15 @@ export default function PatientDetail() {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [text, setText] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState("");
+
+  const loadRecords = useCallback(async () => {
+    const r = await fetch(`/api/v1/patients/${id}/records`);
+    if (!r.ok) throw new Error("failed to load records");
+    return (await r.json()) as MedicalRecord[];
+  }, [id]);
 
   useEffect(() => {
     setLoading(true);
@@ -43,9 +52,7 @@ export default function PatientDetail() {
       fetch(`/api/v1/patients/${id}`).then((r) =>
         r.ok ? r.json() : Promise.reject()
       ),
-      fetch(`/api/v1/patients/${id}/records`).then((r) =>
-        r.ok ? r.json() : Promise.reject()
-      ),
+      loadRecords(),
     ])
       .then(([p, recs]) => {
         setPatient(p);
@@ -57,7 +64,28 @@ export default function PatientDetail() {
         setError("تعذر تحميل بيانات المريض");
         setLoading(false);
       });
-  }, [id]);
+  }, [id, loadRecords]);
+
+  const handleAnalyze = async () => {
+    if (!text.trim()) return;
+    setAnalyzing(true);
+    setAnalyzeError("");
+    try {
+      const r = await fetch(`/api/v1/patients/${id}/records/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) throw new Error("analysis failed");
+      const recs = await loadRecords();
+      setRecords(recs);
+      setText("");
+    } catch {
+      setAnalyzeError("تعذر تحليل النص — تأكد من تشغيل الخادم");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -111,6 +139,33 @@ export default function PatientDetail() {
                   </span>
                 ))}
               </div>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-teal-700">
+                تحليل نص طبي بالذكاء الاصطناعي
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                الصق ملاحظات التقرير الطبي وسيقوم النظام بتحليلها وحفظها كسجل
+                منظم.
+              </p>
+              <textarea
+                className="mt-3 w-full rounded-xl border border-teal-200 p-3 text-slate-800 focus:border-teal-500 focus:outline-none"
+                rows={4}
+                placeholder="الصق نص التقرير الطبي هنا..."
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+              <button
+                className="mt-3 rounded-xl bg-teal-600 px-6 py-2.5 font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleAnalyze}
+                disabled={analyzing || !text.trim()}
+              >
+                {analyzing ? "جارٍ التحليل..." : "تحليل النص"}
+              </button>
+              {analyzeError && (
+                <p className="mt-2 text-sm text-red-700">{analyzeError}</p>
+              )}
             </div>
 
             <h2 className="mb-4 text-xl font-semibold text-teal-700">

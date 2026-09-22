@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import date
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,7 @@ from app import models, schemas
 from app.core.config import settings
 from app.db import get_db, init_db
 from app.seed import run_seed
+from app.services.ai_service import analyze_medical_text
 
 
 @asynccontextmanager
@@ -57,3 +59,42 @@ def get_records(patient_id: int, db: Session = Depends(get_db)):
         .filter(models.MedicalRecord.patient_id == patient_id)
         .all()
     )
+
+
+@app.post(
+    "/api/v1/patients/{patient_id}/records/text",
+    response_model=schemas.RecordOut,
+    status_code=201,
+)
+def create_record_from_text(
+    patient_id: int,
+    payload: schemas.RecordTextIn,
+    db: Session = Depends(get_db),
+):
+    patient = (
+        db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    )
+    if not patient:
+        raise HTTPException(status_code=404, detail="المريض غير موجود")
+
+    try:
+        # PRIVACY: raw medical text is passed to the AI service but never logged.
+        analysis = analyze_medical_text(payload.text)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="تعذر تحليل النص — فشل الاتصال بخدمة الذكاء الاصطناعي",
+        ) from exc
+
+    record = models.MedicalRecord(
+        patient_id=patient_id,
+        record_type=analysis["record_type"],
+        title=analysis["title"],
+        content=analysis["content"],
+        source="manual",
+        record_date=date.today(),
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
