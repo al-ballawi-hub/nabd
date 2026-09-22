@@ -1,18 +1,15 @@
 from contextlib import asynccontextmanager
-from datetime import date
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app import schemas
 from app.core.config import settings
 from app.core.security import create_access_token, get_current_user, require_doctor
 from app.db import get_db, init_db
 from app.seed import run_seed
-from app.services.ai_service import analyze_medical_text
-from app.services.risk_service import summarize_risks
-from app.services.safety_service import check_duplicate_lab
+from app.services import patient_service, record_service
 
 
 @asynccontextmanager
@@ -56,12 +53,15 @@ def seed(
     return run_seed(db)
 
 
-@app.get("/api/v1/patients", response_model=list[schemas.PatientOut])
+@app.get("/api/v1/patients", response_model=schemas.Page[schemas.PatientOut])
 def list_patients(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return db.query(models.Patient).all()
+    items, total = patient_service.list_patients(db, limit, offset)
+    return schemas.Page(items=items, total=total, limit=limit, offset=offset)
 
 
 @app.get("/api/v1/patients/{patient_id}", response_model=schemas.PatientOut)
@@ -70,23 +70,22 @@ def get_patient(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
-    return patient
+    return patient_service.get_patient(db, patient_id)
 
 
-@app.get("/api/v1/patients/{patient_id}/records", response_model=list[schemas.RecordOut])
+@app.get(
+    "/api/v1/patients/{patient_id}/records",
+    response_model=schemas.Page[schemas.RecordOut],
+)
 def get_records(
     patient_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return (
-        db.query(models.MedicalRecord)
-        .filter(models.MedicalRecord.patient_id == patient_id)
-        .all()
-    )
+    items, total = patient_service.list_records(db, patient_id, limit, offset)
+    return schemas.Page(items=items, total=total, limit=limit, offset=offset)
 
 
 @app.post(
@@ -100,70 +99,13 @@ def create_record_from_text(
     db: Session = Depends(get_db),
     user: dict = Depends(require_doctor),
 ):
-    patient = (
-        db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    result, saved = record_service.create_record_from_text(
+        db, patient_id, payload.text, payload.override, user["name"]
     )
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
-
-    try:
-        # PRIVACY: raw medical text is passed to the AI service but never logged.
-        analysis = analyze_medical_text(
-            payload.text,
-            allergies=[a.name for a in patient.allergies],
-            conditions=[c.name for c in patient.chronic_conditions],
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Text analysis failed — AI service unavailable",
-        ) from exc
-
-    warnings = list(analysis.get("conflicts", []))
-    warnings += check_duplicate_lab(
-        db,
-        patient_id,
-        analysis["record_type"],
-        analysis["title"],
-        analysis["content"],
+    response.status_code = (
+        status.HTTP_201_CREATED if saved else status.HTTP_200_OK
     )
-
-    if warnings and not payload.override:
-        response.status_code = status.HTTP_200_OK
-        return schemas.RecordTextResult(
-            saved=False,
-            warnings=warnings,
-            record_type=analysis["record_type"],
-            title=analysis["title"],
-            content=analysis["content"],
-        )
-
-    # created_by is taken from the verified JWT, never from the request body.
-    record = models.MedicalRecord(
-        patient_id=patient_id,
-        record_type=analysis["record_type"],
-        title=analysis["title"],
-        content=analysis["content"],
-        source="manual",
-        record_date=date.today(),
-        created_by=user["name"],
-    )
-    try:
-        db.add(record)
-        db.commit()
-        db.refresh(record)
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to save record") from exc
-
-    response.status_code = status.HTTP_201_CREATED
-    return schemas.RecordTextResult(
-        saved=True,
-        warnings=warnings,
-        record_type=record.record_type,
-        title=record.title,
-        content=record.content,
-    )
+    return schemas.RecordTextResult(**result)
 
 
 @app.get("/api/v1/patients/{patient_id}/risks", response_model=schemas.RiskSummary)
@@ -172,39 +114,22 @@ def get_patient_risks(
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    patient = (
-        db.query(models.Patient).filter(models.Patient.id == patient_id).first()
-    )
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
-
-    records = (
-        db.query(models.MedicalRecord)
-        .filter(models.MedicalRecord.patient_id == patient_id)
-        .all()
-    )
-    family = (
-        db.query(models.FamilyMember)
-        .filter(models.FamilyMember.patient_id == patient_id)
-        .all()
-    )
-    return summarize_risks(patient, records, family)
+    return patient_service.get_risks(db, patient_id)
 
 
 @app.get(
     "/api/v1/patients/{patient_id}/family",
-    response_model=list[schemas.FamilyMemberOut],
+    response_model=schemas.Page[schemas.FamilyMemberOut],
 )
 def list_family(
     patient_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _user: dict = Depends(get_current_user),
 ):
-    return (
-        db.query(models.FamilyMember)
-        .filter(models.FamilyMember.patient_id == patient_id)
-        .all()
-    )
+    items, total = patient_service.list_family(db, patient_id, limit, offset)
+    return schemas.Page(items=items, total=total, limit=limit, offset=offset)
 
 
 @app.post(
@@ -218,19 +143,4 @@ def add_family_member(
     db: Session = Depends(get_db),
     _user: dict = Depends(require_doctor),
 ):
-    patient = (
-        db.query(models.Patient).filter(models.Patient.id == patient_id).first()
-    )
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
-
-    member = models.FamilyMember(patient_id=patient_id, **payload.model_dump())
-    try:
-        db.add(member)
-        db.commit()
-        db.refresh(member)
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to save family member") from exc
-
-    return member
+    return patient_service.add_family_member(db, patient_id, payload)

@@ -5,6 +5,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
+class Page[T](BaseModel):
+    """Offset/limit pagination envelope for list endpoints."""
+
+    items: list[T]
+    total: int
+    limit: int
+    offset: int
+
+
 class ORMModel(BaseModel):
     """Base schema that maps SQLAlchemy attributes to camelCase JSON."""
 
