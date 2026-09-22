@@ -42,7 +42,10 @@ PATIENTS = [
 RECORDS = {
     "Ahmed Mohammed Al-Otaibi": [
         {"record_type": "lab", "title": "HbA1c Glycated Hemoglobin",
-         "content": "Result: 8.4% — above the normal range (4-5.6%), indicating poor glycemic control.",
+         "content": (
+             "Result: 8.4% — above the normal range (4-5.6%), indicating poor "
+             "glycemic control."
+         ),
          "source": "manual", "record_date": date(2026, 7, 15)},
         {"record_type": "prescription", "title": "Prescription: Metformin 850 mg",
          "content": "One tablet after lunch and dinner daily. Caution: monitor renal function.",
@@ -56,7 +59,10 @@ RECORDS = {
          "content": "One tablet daily in the evening. Anticoagulant — interacts with aspirin.",
          "source": "manual", "record_date": date(2026, 8, 2)},
         {"record_type": "report", "title": "Cardiology Report",
-         "content": "Mild cardiac muscle weakness, ejection fraction 45%. Follow-up recommended every 3 months.",
+         "content": (
+             "Mild cardiac muscle weakness, ejection fraction 45%. Follow-up "
+             "recommended every 3 months."
+         ),
          "source": "manual", "record_date": date(2026, 8, 2)},
         {"record_type": "lab", "title": "Renal Function Panel",
          "content": "Creatinine 1.3 mg/dL — borderline within normal limits.",
@@ -78,6 +84,27 @@ RECORDS = {
 }
 
 
+# Family members: patient name -> list of relatives (for the medical family tree)
+FAMILY = {
+    "Ahmed Mohammed Al-Otaibi": [
+        {"relation": "father", "name": "Mohammed Al-Otaibi", "gender": "Male",
+         "age": 78, "deceased": True, "conditions": "Type 2 Diabetes, Coronary Artery Disease"},
+        {"relation": "mother", "name": "Fatimah Al-Otaibi", "gender": "Female",
+         "age": 72, "deceased": False, "conditions": "Hypertension"},
+    ],
+    "Khalid Abdullah Al-Dosari": [
+        {"relation": "father", "name": "Abdullah Al-Dosari", "gender": "Male",
+         "age": 81, "deceased": True, "conditions": "Heart Failure, Coronary Artery Disease"},
+        {"relation": "brother", "name": "Fahad Al-Dosari", "gender": "Male",
+         "age": 60, "deceased": False, "conditions": "Type 2 Diabetes"},
+    ],
+    "Noura Saad Al-Qahtani": [
+        {"relation": "mother", "name": "Aisha Al-Qahtani", "gender": "Female",
+         "age": 68, "deceased": False, "conditions": "Asthma"},
+    ],
+}
+
+
 def run_seed(db: Session) -> dict:
     if db.query(models.Patient).count() > 0:
         return {"message": "Demo data already exists", "seeded": False}
@@ -88,6 +115,8 @@ def run_seed(db: Session) -> dict:
         db.flush()
         for r in RECORDS.get(p["name"], []):
             db.add(models.MedicalRecord(patient_id=patient.id, **r))
+        for f in FAMILY.get(p["name"], []):
+            db.add(models.FamilyMember(patient_id=patient.id, **f))
 
     db.commit()
     return {
@@ -95,4 +124,5 @@ def run_seed(db: Session) -> dict:
         "seeded": True,
         "patients": len(PATIENTS),
         "records": sum(len(v) for v in RECORDS.values()),
+        "family_members": sum(len(v) for v in FAMILY.values()),
     }
