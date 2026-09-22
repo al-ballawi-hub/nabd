@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import FamilyTree from "./components/FamilyTree";
 import TopNav from "./components/TopNav";
+import TopRisks from "./components/TopRisks";
+import { useAuth } from "./context/auth";
 
 type Patient = {
   id: number;
@@ -20,6 +23,7 @@ type MedicalRecord = {
   content: string;
   source: string;
   recordDate: string | null;
+  createdBy: string | null;
 };
 
 type AnalysisResult = {
@@ -44,8 +48,13 @@ const split = (s: string) =>
     .filter(Boolean)
     .filter((x) => x.toLowerCase() !== "none");
 
+const MAX_TEXT_LENGTH = 5000;
+
 export default function PatientDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const isDoctor = user?.role === "doctor";
+
   const [patient, setPatient] = useState<Patient | null>(null);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +99,7 @@ export default function PatientDetail() {
       const r = await fetch(`/api/v1/patients/${id}/records/text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, override }),
+        body: JSON.stringify({ text, override, created_by: user?.name }),
       });
       if (!r.ok) throw new Error("analysis failed");
       const result = (await r.json()) as AnalysisResult;
@@ -116,7 +125,7 @@ export default function PatientDetail() {
       <TopNav />
 
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        {loading && <p className="text-white/80">Loading…</p>}
+        {loading && <p className="font-medium text-teal-50">Loading…</p>}
         {error && (
           <p className="rounded-xl bg-red-500/20 px-4 py-3 text-red-100">
             {error}
@@ -131,7 +140,7 @@ export default function PatientDetail() {
                   <h1 className="text-2xl font-bold text-slate-800">
                     {patient.name}
                   </h1>
-                  <p className="mt-1 text-slate-500">
+                  <p className="mt-1 text-slate-600">
                     {patient.age} yrs · {patient.gender} · Blood Type{" "}
                     {patient.bloodType}
                   </p>
@@ -149,7 +158,7 @@ export default function PatientDetail() {
                   Allergies
                 </span>
                 {split(patient.allergies).length === 0 ? (
-                  <span className="text-xs text-slate-400">None</span>
+                  <span className="text-xs text-slate-500">None</span>
                 ) : (
                   split(patient.allergies).map((a) => (
                     <span
@@ -167,7 +176,7 @@ export default function PatientDetail() {
                   Chronic Conditions
                 </span>
                 {split(patient.chronicConditions).length === 0 ? (
-                  <span className="text-xs text-slate-400">None</span>
+                  <span className="text-xs text-slate-500">None</span>
                 ) : (
                   split(patient.chronicConditions).map((c) => (
                     <span
@@ -181,6 +190,10 @@ export default function PatientDetail() {
               </div>
             </div>
 
+            <div className="mb-8">
+              <TopRisks patientId={id!} />
+            </div>
+
             {safetyWarnings.length > 0 && (
               <div className="warning-glow mb-8 rounded-3xl border border-red-300/60 bg-red-50/95 p-6 backdrop-blur-md">
                 <div className="flex items-center gap-2">
@@ -190,8 +203,8 @@ export default function PatientDetail() {
                   </h2>
                 </div>
                 <p className="mt-1 text-sm text-red-600">
-                  This record triggers the following safety concerns against
-                  the patient's profile:
+                  This record triggers the following concerns against the
+                  patient's profile:
                 </p>
                 <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-red-700">
                   {safetyWarnings.map((w) => (
@@ -216,38 +229,50 @@ export default function PatientDetail() {
               </div>
             )}
 
-            <div className="mb-8 rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
-              <h2 className="text-lg font-bold text-teal-700">
-                Direct AI Text Analysis
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Paste clinical notes and the AI agent will analyze, classify and
-                summarize them into a structured record.
-              </p>
-              <textarea
-                className="mt-3 w-full rounded-2xl border border-teal-200 bg-white/70 p-3 text-slate-800 focus:border-teal-500 focus:outline-none"
-                rows={4}
-                placeholder="Paste medical report notes here…"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-              />
-              <button
-                className="mt-3 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => handleAnalyze(false)}
-                disabled={analyzing || !text.trim()}
-              >
-                {analyzing ? "Analyzing…" : "Analyze Text"}
-              </button>
-              {analyzeError && (
-                <p className="mt-2 text-sm text-red-600">{analyzeError}</p>
-              )}
+            {isDoctor && (
+              <div className="mb-8 rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
+                <h2 className="text-lg font-bold text-teal-700">
+                  Direct AI Text Analysis
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Paste clinical notes and the AI agent will analyze, classify
+                  and summarize them into a structured record.
+                </p>
+                <textarea
+                  className="mt-3 w-full rounded-2xl border border-teal-200 bg-white/70 p-3 text-slate-800 focus:border-teal-500 focus:outline-none"
+                  rows={4}
+                  placeholder="Paste medical report notes here…"
+                  value={text}
+                  maxLength={MAX_TEXT_LENGTH}
+                  onChange={(e) => setText(e.target.value)}
+                />
+                <div className="mt-1 text-right text-xs text-slate-500">
+                  {text.length} / {MAX_TEXT_LENGTH}
+                </div>
+                <button
+                  className="mt-3 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => handleAnalyze(false)}
+                  disabled={analyzing || !text.trim()}
+                >
+                  {analyzing ? "Analyzing…" : "Analyze Text"}
+                </button>
+                {analyzeError && (
+                  <p className="mt-2 text-sm text-red-600">{analyzeError}</p>
+                )}
+              </div>
+            )}
+
+            <div className="mb-8">
+              <FamilyTree patientId={id!} />
             </div>
 
             <h2 className="mb-4 text-xl font-bold text-white drop-shadow">
               Medical Records ({records.length})
             </h2>
             {records.length === 0 && (
-              <p className="text-white/80">No medical records for this patient.</p>
+              <p className="font-medium text-teal-50">
+                No medical records for this patient.
+              </p>
             )}
 
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -272,9 +297,10 @@ export default function PatientDetail() {
                       </h3>
                     </div>
                     <p className="leading-relaxed text-slate-700">{r.content}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {r.recordDate ?? "No date"} · Source:{" "}
                       {r.source === "ocr" ? "OCR Scan" : "Manual Entry"}
+                      {r.createdBy ? ` · By ${r.createdBy}` : ""}
                     </p>
                   </div>
                 );

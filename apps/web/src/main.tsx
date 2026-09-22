@@ -1,20 +1,16 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import App from "./App";
-import PatientDetail from "./PatientDetail";
-import { DoctorProvider } from "./context/DoctorContext";
+import Root from "./Root";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { AuthProvider } from "./context/AuthContext";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <DoctorProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/patients/:id" element={<PatientDetail />} />
-        </Routes>
-      </BrowserRouter>
-    </DoctorProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

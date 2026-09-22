@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import TopNav from "./components/TopNav";
+import { useAuth } from "./context/auth";
 
 type Patient = {
   id: number;
@@ -20,6 +21,9 @@ const split = (s: string) =>
     .filter((x) => x.toLowerCase() !== "none");
 
 export default function App() {
+  const { user } = useAuth();
+  const isDoctor = user?.role === "doctor";
+
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -59,26 +63,28 @@ export default function App() {
             <h1 className="text-3xl font-bold text-white drop-shadow-lg">
               Patient Directory
             </h1>
-            <p className="mt-1 text-white/80">
+            <p className="mt-1 font-medium text-teal-50">
               Review and manage your patients' medical records.
             </p>
           </div>
-          <button
-            className="rounded-2xl bg-white/90 px-6 py-3 font-semibold text-teal-700 shadow-xl shadow-teal-900/20 backdrop-blur transition-transform hover:-translate-y-0.5 active:scale-95"
-            onClick={seed}
-          >
-            Generate Demo Data
-          </button>
+          {isDoctor && (
+            <button
+              className="rounded-2xl bg-white/90 px-6 py-3 font-semibold text-teal-700 shadow-xl shadow-teal-900/20 backdrop-blur transition-transform hover:-translate-y-0.5 active:scale-95"
+              onClick={seed}
+            >
+              Generate Demo Data
+            </button>
+          )}
         </div>
 
-        {loading && <p className="text-white/80">Loading…</p>}
+        {loading && <p className="font-medium text-teal-50">Loading…</p>}
         {error && (
           <p className="rounded-xl bg-red-500/20 px-4 py-3 text-red-100">
             {error}
           </p>
         )}
         {!loading && !error && patients.length === 0 && (
-          <p className="text-white/80">
+          <p className="font-medium text-teal-50">
             No data yet — press "Generate Demo Data".
           </p>
         )}
@@ -96,7 +102,7 @@ export default function App() {
                 <h2 className="mb-1 text-lg font-bold text-slate-800">
                   {p.name}
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-600">
                   {p.age} yrs · {p.gender} · Blood {p.bloodType}
                 </p>
 
@@ -105,7 +111,7 @@ export default function App() {
                     Allergies
                   </span>
                   {allergies.length === 0 ? (
-                    <span className="text-xs text-slate-400">None</span>
+                    <span className="text-xs text-slate-500">None</span>
                   ) : (
                     allergies.map((a) => (
                       <span
@@ -123,7 +129,7 @@ export default function App() {
                     Conditions
                   </span>
                   {conditions.length === 0 ? (
-                    <span className="text-xs text-slate-400">None</span>
+                    <span className="text-xs text-slate-500">None</span>
                   ) : (
                     conditions.map((c) => (
                       <span
