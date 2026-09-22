@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "openrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter (DeepSeek)",
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1",
+        "apiKey": "{env:OPENROUTER_API_KEY}"
+      },
+      "models": {
+        "deepseek/deepseek-chat-v3-0324": {
+          "name": "DeepSeek V3 Pro (Coding)",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
+        },
+        "deepseek/deepseek-r1": {
+          "name": "DeepSeek R1 (Reasoning/Planning)",
+          "options": {
+            "reasoning_effort": "medium"
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "nabd-coder": {
+      "model": "openrouter/deepseek/deepseek-chat-v3-0324"
+    }
+  },
+  "instructions": ["AGENTS.md"]
+}
