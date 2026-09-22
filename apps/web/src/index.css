@@ -2,4 +2,21 @@
 
 body {
   font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  background: linear-gradient(135deg, #0f766e 0%, #059669 55%, #134e4a 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+@keyframes warning-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 48px rgba(239, 68, 68, 0.85);
+  }
+}
+
+.warning-glow {
+  animation: warning-glow 1.6s ease-in-out infinite;
 }

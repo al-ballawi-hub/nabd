@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import TopNav from "./components/TopNav";
 
 type Patient = {
   id: number;
@@ -21,14 +22,27 @@ type MedicalRecord = {
   recordDate: string | null;
 };
 
-const RECORD_TYPES: Record<string, { label: string; className: string }> = {
-  lab: { label: "تحليل مخبري", className: "bg-teal-100 text-teal-900" },
-  prescription: { label: "وصفة طبية", className: "bg-blue-100 text-blue-800" },
-  report: { label: "تقرير", className: "bg-amber-100 text-amber-800" },
-  scan: { label: "أشعة", className: "bg-red-100 text-red-800" },
+type AnalysisResult = {
+  saved: boolean;
+  warnings: string[];
+  recordType: string;
+  title: string;
+  content: string;
 };
 
-const split = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+const RECORD_TYPES: Record<string, { label: string; className: string }> = {
+  lab: { label: "Lab Test", className: "bg-teal-100 text-teal-800" },
+  prescription: { label: "Prescription", className: "bg-blue-100 text-blue-800" },
+  report: { label: "Report", className: "bg-amber-100 text-amber-800" },
+  scan: { label: "Imaging / Scan", className: "bg-red-100 text-red-800" },
+};
+
+const split = (s: string) =>
+  s
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .filter((x) => x.toLowerCase() !== "none");
 
 export default function PatientDetail() {
   const { id } = useParams();
@@ -36,9 +50,11 @@ export default function PatientDetail() {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [text, setText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
+  const [safetyWarnings, setSafetyWarnings] = useState<string[]>([]);
 
   const loadRecords = useCallback(async () => {
     const r = await fetch(`/api/v1/patients/${id}/records`);
@@ -61,12 +77,12 @@ export default function PatientDetail() {
         setLoading(false);
       })
       .catch(() => {
-        setError("تعذر تحميل بيانات المريض");
+        setError("Unable to load patient data.");
         setLoading(false);
       });
   }, [id, loadRecords]);
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (override = false) => {
     if (!text.trim()) return;
     setAnalyzing(true);
     setAnalyzeError("");
@@ -74,130 +90,191 @@ export default function PatientDetail() {
       const r = await fetch(`/api/v1/patients/${id}/records/text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, override }),
       });
       if (!r.ok) throw new Error("analysis failed");
-      const recs = await loadRecords();
-      setRecords(recs);
-      setText("");
+      const result = (await r.json()) as AnalysisResult;
+      if (result.saved) {
+        setSafetyWarnings([]);
+        setText("");
+        const recs = await loadRecords();
+        setRecords(recs);
+      } else {
+        setSafetyWarnings(result.warnings ?? []);
+      }
     } catch {
-      setAnalyzeError("تعذر تحليل النص — تأكد من تشغيل الخادم");
+      setAnalyzeError(
+        "Text analysis failed — please ensure the server is running."
+      );
     } finally {
       setAnalyzing(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-br from-teal-600 to-teal-800 px-10 py-8 text-white">
-        <div>
-          <h1 className="text-4xl font-bold tracking-wide">نَبْض</h1>
-          <p className="mt-1 opacity-90">ملف المريض — Patient Profile</p>
-        </div>
-        <Link className="rounded-xl bg-white px-6 py-3 font-semibold text-teal-800 no-underline transition-transform hover:-translate-y-0.5" to="/">
-          العودة للقائمة
-        </Link>
-      </header>
+    <div className="min-h-screen">
+      <TopNav />
 
-      <main className="mx-auto my-8 w-full max-w-5xl flex-1 px-6">
-        {loading && <p className="text-slate-500">جارٍ التحميل...</p>}
+      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+        {loading && <p className="text-white/80">Loading…</p>}
         {error && (
-          <p className="rounded-xl bg-red-100 px-4 py-3 text-red-700">{error}</p>
+          <p className="rounded-xl bg-red-500/20 px-4 py-3 text-red-100">
+            {error}
+          </p>
         )}
 
         {!loading && !error && patient && (
           <>
-            <div className="mb-8 rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-semibold">{patient.name}</h2>
-              <p className="mt-1 text-slate-500">
-                {patient.age} سنة · {patient.gender} · فصيلة الدم{" "}
-                {patient.bloodType}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-teal-700">
-                  الحساسية:
-                </span>
-                {split(patient.allergies).map((a) => (
-                  <span
-                    className="rounded-full bg-red-100 px-3 py-0.5 text-sm text-red-800"
-                    key={a}
-                  >
-                    {a}
-                  </span>
-                ))}
+            <div className="mb-8 rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-800">
+                    {patient.name}
+                  </h1>
+                  <p className="mt-1 text-slate-500">
+                    {patient.age} yrs · {patient.gender} · Blood Type{" "}
+                    {patient.bloodType}
+                  </p>
+                </div>
+                <Link
+                  to="/"
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-teal-700 no-underline shadow transition-transform hover:-translate-y-0.5 active:scale-95"
+                >
+                  ← Back to patients
+                </Link>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-teal-700">
-                  أمراض مزمنة:
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Allergies
                 </span>
-                {split(patient.chronicConditions).map((c) => (
-                  <span
-                    className="rounded-full bg-teal-100 px-3 py-0.5 text-sm text-teal-900"
-                    key={c}
-                  >
-                    {c}
-                  </span>
-                ))}
+                {split(patient.allergies).length === 0 ? (
+                  <span className="text-xs text-slate-400">None</span>
+                ) : (
+                  split(patient.allergies).map((a) => (
+                    <span
+                      className="rounded-full bg-red-100 px-3 py-0.5 text-xs font-medium text-red-700"
+                      key={a}
+                    >
+                      {a}
+                    </span>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Chronic Conditions
+                </span>
+                {split(patient.chronicConditions).length === 0 ? (
+                  <span className="text-xs text-slate-400">None</span>
+                ) : (
+                  split(patient.chronicConditions).map((c) => (
+                    <span
+                      className="rounded-full bg-teal-100 px-3 py-0.5 text-xs font-medium text-teal-800"
+                      key={c}
+                    >
+                      {c}
+                    </span>
+                  ))
+                )}
               </div>
             </div>
 
-            <div className="mb-8 rounded-2xl border border-teal-100 bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-teal-700">
-                تحليل نص طبي بالذكاء الاصطناعي
+            {safetyWarnings.length > 0 && (
+              <div className="warning-glow mb-8 rounded-3xl border border-red-300/60 bg-red-50/95 p-6 backdrop-blur-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">⚠️</span>
+                  <h2 className="text-lg font-bold text-red-700">
+                    AI Safety Alert — Review Required
+                  </h2>
+                </div>
+                <p className="mt-1 text-sm text-red-600">
+                  This record triggers the following safety concerns against
+                  the patient's profile:
+                </p>
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-red-700">
+                  {safetyWarnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    className="rounded-2xl bg-red-600 px-5 py-2.5 font-semibold text-white shadow-lg shadow-red-600/30 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => handleAnalyze(true)}
+                    disabled={analyzing}
+                  >
+                    {analyzing ? "Saving…" : "Override & Approve"}
+                  </button>
+                  <button
+                    className="rounded-2xl bg-white px-5 py-2.5 font-semibold text-slate-600 shadow transition-transform hover:-translate-y-0.5 active:scale-95"
+                    onClick={() => setSafetyWarnings([])}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-8 rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
+              <h2 className="text-lg font-bold text-teal-700">
+                Direct AI Text Analysis
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                الصق ملاحظات التقرير الطبي وسيقوم النظام بتحليلها وحفظها كسجل
-                منظم.
+                Paste clinical notes and the AI agent will analyze, classify and
+                summarize them into a structured record.
               </p>
               <textarea
-                className="mt-3 w-full rounded-xl border border-teal-200 p-3 text-slate-800 focus:border-teal-500 focus:outline-none"
+                className="mt-3 w-full rounded-2xl border border-teal-200 bg-white/70 p-3 text-slate-800 focus:border-teal-500 focus:outline-none"
                 rows={4}
-                placeholder="الصق نص التقرير الطبي هنا..."
+                placeholder="Paste medical report notes here…"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />
               <button
-                className="mt-3 rounded-xl bg-teal-600 px-6 py-2.5 font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleAnalyze}
+                className="mt-3 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => handleAnalyze(false)}
                 disabled={analyzing || !text.trim()}
               >
-                {analyzing ? "جارٍ التحليل..." : "تحليل النص"}
+                {analyzing ? "Analyzing…" : "Analyze Text"}
               </button>
               {analyzeError && (
-                <p className="mt-2 text-sm text-red-700">{analyzeError}</p>
+                <p className="mt-2 text-sm text-red-600">{analyzeError}</p>
               )}
             </div>
 
-            <h2 className="mb-4 text-xl font-semibold text-teal-700">
-              السجلات الطبية ({records.length})
+            <h2 className="mb-4 text-xl font-bold text-white drop-shadow">
+              Medical Records ({records.length})
             </h2>
             {records.length === 0 && (
-              <p className="text-slate-500">لا توجد سجلات طبية لهذا المريض.</p>
+              <p className="text-white/80">No medical records for this patient.</p>
             )}
 
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {records.map((r) => {
                 const t = RECORD_TYPES[r.recordType] ?? {
                   label: r.recordType,
-                  className: "bg-teal-100 text-teal-900",
+                  className: "bg-teal-100 text-teal-800",
                 };
                 return (
                   <div
-                    className="flex flex-col gap-2 rounded-2xl border border-teal-100 bg-white p-5 shadow-sm"
+                    className="flex flex-col gap-2 rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md"
                     key={r.id}
                   >
                     <div className="flex flex-col items-start gap-1">
                       <span
-                        className={`rounded-full px-3 py-0.5 text-sm ${t.className}`}
+                        className={`rounded-full px-3 py-0.5 text-xs font-medium ${t.className}`}
                       >
                         {t.label}
                       </span>
-                      <h3 className="text-base font-semibold">{r.title}</h3>
+                      <h3 className="text-base font-semibold text-slate-800">
+                        {r.title}
+                      </h3>
                     </div>
-                    <p className="leading-relaxed text-slate-800">{r.content}</p>
-                    <p className="text-xs text-slate-500">
-                      {r.recordDate ?? "بدون تاريخ"} · المصدر:{" "}
-                      {r.source === "ocr" ? "مسح ضوئي (OCR)" : "إدخال يدوي"}
+                    <p className="leading-relaxed text-slate-700">{r.content}</p>
+                    <p className="text-xs text-slate-400">
+                      {r.recordDate ?? "No date"} · Source:{" "}
+                      {r.source === "ocr" ? "OCR Scan" : "Manual Entry"}
                     </p>
                   </div>
                 );
