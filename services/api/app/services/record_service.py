@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.services.ai_service import analyze_medical_text
+from app.services.medication_service import (
+    register_active_medication,
+    store_drug_warnings,
+)
 from app.services.patient_service import get_patient
 from app.services.safety_service import check_duplicate_lab
 
@@ -20,17 +24,25 @@ def create_record_from_text(
 ) -> tuple[dict, bool]:
     """Analyze free text and create a record.
 
-    Returns ``(result_dict, saved)``. When a safety conflict is detected and
-    ``override`` is False, the record is not saved and ``saved`` is False.
+    Returns ``(result_dict, saved)``. Active medications are auto-registered
+    ONLY when the record is actually saved (after override), never when a
+    safety conflict blocks saving.
     """
     patient = get_patient(db, patient_id)
+
+    active_medications = [
+        pm.name for pm in patient.medications if pm.status == "active"
+    ]
+    allergies = [a.name for a in patient.allergies]
+    conditions = [c.name for c in patient.chronic_conditions]
 
     try:
         # PRIVACY: raw medical text is passed to the AI service but never logged.
         analysis = analyze_medical_text(
             text,
-            allergies=[a.name for a in patient.allergies],
-            conditions=[c.name for c in patient.chronic_conditions],
+            allergies=allergies,
+            conditions=conditions,
+            active_medications=active_medications,
         )
     except Exception as exc:
         raise HTTPException(
@@ -38,8 +50,8 @@ def create_record_from_text(
             detail="Text analysis failed — AI service unavailable",
         ) from exc
 
-    warnings = list(analysis.get("conflicts", []))
-    warnings += check_duplicate_lab(
+    conflicts = list(analysis.get("conflicts", []))
+    conflicts += check_duplicate_lab(
         db,
         patient_id,
         analysis["record_type"],
@@ -47,10 +59,10 @@ def create_record_from_text(
         analysis["content"],
     )
 
-    if warnings and not override:
+    if conflicts and not override:
         return {
             "saved": False,
-            "warnings": warnings,
+            "conflicts": conflicts,
             "record_type": analysis["record_type"],
             "title": analysis["title"],
             "content": analysis["content"],
@@ -66,8 +78,22 @@ def create_record_from_text(
         record_date=date.today(),
         created_by=created_by,
     )
+
     try:
         db.add(record)
+        db.flush()
+
+        # Auto-register medications only when the record is officially saved.
+        if analysis["record_type"] == "prescription":
+            for med in analysis.get("medications", []):
+                if med.get("name"):
+                    register_active_medication(
+                        db, patient_id, med["name"], med.get("dosage")
+                    )
+
+        # Persist detected drug conflicts (drug-drug / drug-disease only).
+        store_drug_warnings(db, patient_id, conflicts)
+
         db.commit()
         db.refresh(record)
     except Exception as exc:
@@ -76,7 +102,7 @@ def create_record_from_text(
 
     return {
         "saved": True,
-        "warnings": warnings,
+        "conflicts": conflicts,
         "record_type": record.record_type,
         "title": record.title,
         "content": record.content,

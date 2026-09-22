@@ -85,4 +85,10 @@ def get_risks(db: Session, patient_id: int) -> dict:
     patient = get_patient(db, patient_id)
     records, _ = list_records(db, patient_id, limit=1000, offset=0)
     family, _ = list_family(db, patient_id, limit=1000, offset=0)
-    return summarize_risks(patient, records, family)
+    drug_warnings = (
+        db.query(models.DrugWarning)
+        .filter(models.DrugWarning.patient_id == patient_id)
+        .order_by(models.DrugWarning.id.desc())
+        .all()
+    )
+    return summarize_risks(patient, records, family, drug_warnings)

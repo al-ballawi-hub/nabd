@@ -62,7 +62,7 @@ def test_create_record_from_text(client, doctor_headers):
     assert resp.status_code == 201
     data = resp.json()
     assert data["saved"] is True
-    assert data["warnings"] == []
+    assert data["conflicts"] == []
     assert data["recordType"] in {"lab", "prescription", "report", "scan"}
 
     # Audit identity is derived from the JWT, not the request body.
@@ -81,7 +81,7 @@ def test_record_text_safety_guardrail(client, doctor_headers):
     assert blocked.status_code == 200
     data = blocked.json()
     assert data["saved"] is False
-    assert any("Penicillin" in w for w in data["warnings"])
+    assert any("Penicillin" in c["message"] for c in data["conflicts"])
 
     saved = client.post(
         "/api/v1/patients/1/records/text",
@@ -109,7 +109,7 @@ def test_duplicate_lab_flagged(client, doctor_headers):
     )
     data = resp.json()
     assert data["saved"] is False
-    assert any("Duplicate lab test" in w for w in data["warnings"])
+    assert any("Duplicate lab test" in c["message"] for c in data["conflicts"])
 
 
 def test_patient_risks(client, doctor_headers):

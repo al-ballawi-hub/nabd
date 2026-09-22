@@ -35,7 +35,7 @@ def check_duplicate_lab(
     title: str,
     content: str = "",
     days: int = 30,
-) -> list[str]:
+) -> list[dict]:
     """Flag a duplicate lab test if the same test was ordered recently."""
     if record_type != "lab":
         return []
@@ -60,8 +60,14 @@ def check_duplicate_lab(
         if rec_key == test_key:
             when = rec.record_date.isoformat() if rec.record_date else "recently"
             return [
-                f"Duplicate lab test: a '{test_key}' test was already ordered on {when} "
-                f"(within the last {days} days)."
+                {
+                    "severity": "moderate",
+                    "type": "duplicate",
+                    "message": (
+                        f"Duplicate lab test: a '{test_key}' test was already ordered "
+                        f"on {when} (within the last {days} days)."
+                    ),
+                }
             ]
 
     return []

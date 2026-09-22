@@ -63,11 +63,19 @@ class OcrExtractResult(BaseModel):
     extracted_text: str
 
 
+class ConflictItem(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    severity: Literal["high", "moderate", "low"] = "moderate"
+    type: Literal["drug-drug", "drug-disease", "allergy", "duplicate"] = "drug-disease"
+    message: str = ""
+
+
 class RecordTextResult(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     saved: bool
-    warnings: list[str]
+    conflicts: list[ConflictItem]
     record_type: str
     title: str
     content: str
@@ -112,6 +120,19 @@ class FamilyMemberIn(BaseModel):
     conditions: list[str] = Field(default_factory=list)
 
 
+class MedicationIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    dosage: str | None = Field(default=None, max_length=100)
+
+
+class PatientMedicationOut(ORMModel):
+    id: int
+    name: str
+    status: str
+    dosage: str | None
+    started_on: date | None
+
+
 class RiskItem(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -125,6 +146,8 @@ class RiskSummary(BaseModel):
 
     chronic_conditions: list[str]
     allergies: list[str]
+    active_medications: list[str]
+    drug_warnings: list[ConflictItem]
     abnormal_labs: list[RiskItem]
     hereditary_risks: list[str]
     risk_level: str

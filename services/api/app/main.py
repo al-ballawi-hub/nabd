@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, get_current_user, require_doctor
 from app.db import get_db, init_db
 from app.seed import run_seed
-from app.services import ocr_service, patient_service, record_service
+from app.services import medication_service, ocr_service, patient_service, record_service
 
 
 @asynccontextmanager
@@ -181,3 +181,42 @@ def add_family_member(
     _user: dict = Depends(require_doctor),
 ):
     return patient_service.add_family_member(db, patient_id, payload)
+
+
+@app.get(
+    "/api/v1/patients/{patient_id}/medications",
+    response_model=list[schemas.PatientMedicationOut],
+)
+def list_medications(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    return medication_service.list_medications(db, patient_id)
+
+
+@app.post(
+    "/api/v1/patients/{patient_id}/medications",
+    response_model=schemas.PatientMedicationOut,
+    status_code=201,
+)
+def add_medication(
+    patient_id: int,
+    payload: schemas.MedicationIn,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_doctor),
+):
+    return medication_service.add_medication(db, patient_id, payload)
+
+
+@app.post(
+    "/api/v1/patients/{patient_id}/medications/{medication_id}/stop",
+    response_model=schemas.PatientMedicationOut,
+)
+def stop_medication(
+    patient_id: int,
+    medication_id: int,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_doctor),
+):
+    return medication_service.stop_medication(db, patient_id, medication_id)

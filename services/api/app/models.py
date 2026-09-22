@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -80,6 +82,11 @@ class Patient(Base):
     chronic_conditions = relationship(
         "Condition", secondary=patient_conditions, back_populates="patients"
     )
+    medications = relationship(
+        "PatientMedication",
+        back_populates="patient",
+        cascade="all, delete-orphan",
+    )
 
 
 class Allergy(Base):
@@ -107,6 +114,60 @@ class Condition(Base):
         secondary=family_member_conditions,
         back_populates="conditions",
     )
+
+
+class Medication(Base):
+    __tablename__ = "medications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(120), unique=True, nullable=False)
+
+
+class PatientMedication(Base):
+    """A medication a patient is (or was) taking — mutable current state."""
+
+    __tablename__ = "patient_medications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(
+        Integer,
+        ForeignKey("patients.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    medication_id = Column(
+        Integer,
+        ForeignKey("medications.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status = Column(String(20), default="active", nullable=False)  # active | stopped
+    dosage = Column(String(100), nullable=True)
+    started_on = Column(Date, nullable=True)
+
+    patient = relationship("Patient", back_populates="medications")
+    medication = relationship("Medication")
+
+    @property
+    def name(self) -> str:
+        return self.medication.name
+
+
+class DrugWarning(Base):
+    """An ongoing (persisted) drug-interaction warning for a patient."""
+
+    __tablename__ = "drug_warnings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(
+        Integer,
+        ForeignKey("patients.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    severity = Column(String(20), nullable=False)  # high | moderate | low
+    type = Column(String(30), nullable=False)  # drug-drug | drug-disease | allergy
+    message = Column(String(300), nullable=False)
+    created_on = Column(Date, default=date.today)
 
 
 class MedicalRecord(Base):

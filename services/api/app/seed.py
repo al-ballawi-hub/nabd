@@ -104,6 +104,20 @@ FAMILY = {
     ],
 }
 
+# Active medications: patient name -> list of {name, dosage}
+MEDICATIONS = {
+    "Ahmed Mohammed Al-Otaibi": [
+        {"name": "Metformin", "dosage": "850 mg"},
+        {"name": "Amlodipine", "dosage": "5 mg"},
+    ],
+    "Khalid Abdullah Al-Dosari": [
+        {"name": "Aspirin", "dosage": "81 mg"},
+    ],
+    "Mohammed Ali Al-Ghamdi": [
+        {"name": "Amlodipine", "dosage": "5 mg"},
+    ],
+}
+
 
 def _get_or_create(db: Session, model: type, name: str):
     obj = db.query(model).filter(model.name == name).first()
@@ -132,6 +146,18 @@ def run_seed(db: Session) -> dict:
             patient.allergies.append(_get_or_create(db, models.Allergy, name))
         for name in p["chronic_conditions"]:
             patient.chronic_conditions.append(_get_or_create(db, models.Condition, name))
+
+        for m in MEDICATIONS.get(p["name"], []):
+            medication = _get_or_create(db, models.Medication, m["name"])
+            db.add(
+                models.PatientMedication(
+                    patient_id=patient.id,
+                    medication_id=medication.id,
+                    status="active",
+                    dosage=m["dosage"],
+                    started_on=date.today(),
+                )
+            )
 
         for r in RECORDS.get(p["name"], []):
             db.add(models.MedicalRecord(patient_id=patient.id, **r))

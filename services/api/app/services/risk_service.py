@@ -1,7 +1,8 @@
 """Top Risks aggregation for the physician dashboard.
 
-Synthesizes a patient's chronic conditions, allergies, recent abnormal lab
-findings and hereditary (family) history into a single executive summary.
+Synthesizes a patient's chronic conditions, allergies, active medications,
+ongoing drug warnings, recent abnormal lab findings and hereditary (family)
+history into a single executive summary.
 """
 
 from app import models
@@ -25,9 +26,13 @@ def summarize_risks(
     patient: models.Patient,
     records: list[models.MedicalRecord],
     family: list[models.FamilyMember],
+    drug_warnings: list[models.DrugWarning],
 ) -> dict:
     allergies = [a.name for a in patient.allergies]
     chronic = [c.name for c in patient.chronic_conditions]
+    active_medications = [
+        pm.name for pm in patient.medications if pm.status == "active"
+    ]
 
     abnormal_labs = []
     for rec in records:
@@ -49,11 +54,17 @@ def summarize_risks(
                     f"{member.relation.title()}: {condition.name} ({status})"
                 )
 
+    warnings = [
+        {"severity": w.severity, "type": w.type, "message": w.message}
+        for w in drug_warnings
+    ]
+
     score = (
         len(chronic) * 2
         + len(abnormal_labs) * 2
         + len(hereditary_risks)
         + len(allergies)
+        + len(warnings) * 2
     )
     if score >= 7:
         risk_level = "high"
@@ -65,6 +76,8 @@ def summarize_risks(
     return {
         "chronic_conditions": chronic,
         "allergies": allergies,
+        "active_medications": active_medications,
+        "drug_warnings": warnings,
         "abnormal_labs": abnormal_labs,
         "hereditary_risks": hereditary_risks,
         "risk_level": risk_level,
