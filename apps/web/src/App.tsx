@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 type Patient = {
@@ -16,7 +16,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     fetch("/api/v1/patients")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -29,9 +29,11 @@ export default function App() {
         setError("تعذر الاتصال بالخادم — تأكد أن الـ API يعمل على المنفذ 8000");
         setLoading(false);
       });
-  };
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const seed = () => {
     fetch("/api/v1/seed", { method: "POST" }).then(load);
