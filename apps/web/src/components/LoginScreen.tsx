@@ -5,16 +5,25 @@ export default function LoginScreen() {
   const { login } = useAuth();
   const [role, setRole] = useState<Role>("doctor");
   const [name, setName] = useState("Dr. Ahmad Alshomar");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const handleRole = (r: Role) => {
     setRole(r);
     setName(r === "doctor" ? "Dr. Ahmad Alshomar" : "");
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    login({ role, name: name.trim() });
+    setSubmitting(true);
+    setError("");
+    try {
+      await login({ role, name: name.trim() });
+    } catch {
+      setError("Login failed — please try again.");
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -71,10 +80,13 @@ export default function LoginScreen() {
 
         <button
           type="submit"
-          className="mt-6 w-full rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-900/20 transition hover:-translate-y-0.5 active:scale-95"
+          disabled={submitting}
+          className="mt-6 w-full rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-900/20 transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
         >
-          Sign In
+          {submitting ? "Signing in…" : "Sign In"}
         </button>
+
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
         <p className="mt-4 text-center text-xs text-slate-500">
           Simulated session — role-based access for demonstration purposes.

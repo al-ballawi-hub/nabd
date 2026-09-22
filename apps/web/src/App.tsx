@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import TopNav from "./components/TopNav";
 import { useAuth } from "./context/auth";
+import { apiFetch } from "./lib/api";
 
 type Patient = {
   id: number;
@@ -9,16 +10,9 @@ type Patient = {
   age: number | null;
   gender: string | null;
   bloodType: string | null;
-  allergies: string;
-  chronicConditions: string;
+  allergies: string[];
+  chronicConditions: string[];
 };
-
-const split = (s: string) =>
-  s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => x.toLowerCase() !== "none");
 
 export default function App() {
   const { user } = useAuth();
@@ -30,7 +24,7 @@ export default function App() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch("/api/v1/patients")
+    apiFetch("/api/v1/patients")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d: Patient[]) => {
         setPatients(d);
@@ -50,7 +44,7 @@ export default function App() {
   }, [load]);
 
   const seed = () => {
-    fetch("/api/v1/seed", { method: "POST" }).then(load);
+    apiFetch("/api/v1/seed", { method: "POST" }).then(load);
   };
 
   return (
@@ -90,60 +84,56 @@ export default function App() {
         )}
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {patients.map((p) => {
-            const allergies = split(p.allergies);
-            const conditions = split(p.chronicConditions);
-            return (
-              <Link
-                className="block rounded-3xl border border-white/50 bg-white/80 p-6 text-inherit no-underline shadow-xl shadow-teal-900/5 backdrop-blur-md transition-all hover:-translate-y-1 hover:bg-white/90 hover:shadow-2xl hover:shadow-teal-900/10"
-                to={`/patients/${p.id}`}
-                key={p.id}
-              >
-                <h2 className="mb-1 text-lg font-bold text-slate-800">
-                  {p.name}
-                </h2>
-                <p className="text-sm text-slate-600">
-                  {p.age} yrs · {p.gender} · Blood {p.bloodType}
-                </p>
+          {patients.map((p) => (
+            <Link
+              className="block rounded-3xl border border-white/50 bg-white/80 p-6 text-inherit no-underline shadow-xl shadow-teal-900/5 backdrop-blur-md transition-all hover:-translate-y-1 hover:bg-white/90 hover:shadow-2xl hover:shadow-teal-900/10"
+              to={`/patients/${p.id}`}
+              key={p.id}
+            >
+              <h2 className="mb-1 text-lg font-bold text-slate-800">
+                {p.name}
+              </h2>
+              <p className="text-sm text-slate-600">
+                {p.age} yrs · {p.gender} · Blood {p.bloodType}
+              </p>
 
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                    Allergies
-                  </span>
-                  {allergies.length === 0 ? (
-                    <span className="text-xs text-slate-500">None</span>
-                  ) : (
-                    allergies.map((a) => (
-                      <span
-                        className="rounded-full bg-red-100 px-3 py-0.5 text-xs font-medium text-red-700"
-                        key={a}
-                      >
-                        {a}
-                      </span>
-                    ))
-                  )}
-                </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Allergies
+                </span>
+                {p.allergies.length === 0 ? (
+                  <span className="text-xs text-slate-500">None</span>
+                ) : (
+                  p.allergies.map((a) => (
+                    <span
+                      className="rounded-full bg-red-100 px-3 py-0.5 text-xs font-medium text-red-700"
+                      key={a}
+                    >
+                      {a}
+                    </span>
+                  ))
+                )}
+              </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                    Conditions
-                  </span>
-                  {conditions.length === 0 ? (
-                    <span className="text-xs text-slate-500">None</span>
-                  ) : (
-                    conditions.map((c) => (
-                      <span
-                        className="rounded-full bg-teal-100 px-3 py-0.5 text-xs font-medium text-teal-800"
-                        key={c}
-                      >
-                        {c}
-                      </span>
-                    ))
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                  Conditions
+                </span>
+                {p.chronicConditions.length === 0 ? (
+                  <span className="text-xs text-slate-500">None</span>
+                ) : (
+                  p.chronicConditions.map((c) => (
+                    <span
+                      className="rounded-full bg-teal-100 px-3 py-0.5 text-xs font-medium text-teal-800"
+                      key={c}
+                    >
+                      {c}
+                    </span>
+                  ))
+                )}
+              </div>
+            </Link>
+          ))}
         </div>
       </main>
     </div>

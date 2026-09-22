@@ -9,9 +9,12 @@ export type User = {
 
 export type AuthState = {
   user: User | null;
-  login: (user: User) => void;
+  token: string | null;
+  login: (user: User) => Promise<void>;
   logout: () => void;
 };
+
+export const SESSION_STORAGE_KEY = "nabd.session";
 
 export const AuthContext = createContext<AuthState | null>(null);
 

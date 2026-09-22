@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../context/auth";
+import { apiFetch } from "../lib/api";
 
 type FamilyMember = {
   id: number;
@@ -44,7 +45,7 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
   const [conditions, setConditions] = useState("");
 
   const load = useCallback(() => {
-    fetch(`/api/v1/patients/${patientId}/family`)
+    apiFetch(`/api/v1/patients/${patientId}/family`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d: FamilyMember[]) => setMembers(d))
       .catch(() => setError("Unable to load family history."));
@@ -57,9 +58,8 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
   const addMember = async (e: FormEvent) => {
     e.preventDefault();
     if (!relation.trim()) return;
-    const r = await fetch(`/api/v1/patients/${patientId}/family`, {
+    const r = await apiFetch(`/api/v1/patients/${patientId}/family`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ relation, name, conditions }),
     });
     if (r.ok) {

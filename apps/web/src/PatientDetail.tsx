@@ -4,6 +4,7 @@ import FamilyTree from "./components/FamilyTree";
 import TopNav from "./components/TopNav";
 import TopRisks from "./components/TopRisks";
 import { useAuth } from "./context/auth";
+import { apiFetch } from "./lib/api";
 
 type Patient = {
   id: number;
@@ -11,8 +12,8 @@ type Patient = {
   age: number | null;
   gender: string | null;
   bloodType: string | null;
-  allergies: string;
-  chronicConditions: string;
+  allergies: string[];
+  chronicConditions: string[];
 };
 
 type MedicalRecord = {
@@ -41,13 +42,6 @@ const RECORD_TYPES: Record<string, { label: string; className: string }> = {
   scan: { label: "Imaging / Scan", className: "bg-red-100 text-red-800" },
 };
 
-const split = (s: string) =>
-  s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .filter((x) => x.toLowerCase() !== "none");
-
 const MAX_TEXT_LENGTH = 5000;
 
 export default function PatientDetail() {
@@ -66,7 +60,7 @@ export default function PatientDetail() {
   const [safetyWarnings, setSafetyWarnings] = useState<string[]>([]);
 
   const loadRecords = useCallback(async () => {
-    const r = await fetch(`/api/v1/patients/${id}/records`);
+    const r = await apiFetch(`/api/v1/patients/${id}/records`);
     if (!r.ok) throw new Error("failed to load records");
     return (await r.json()) as MedicalRecord[];
   }, [id]);
@@ -74,7 +68,7 @@ export default function PatientDetail() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      fetch(`/api/v1/patients/${id}`).then((r) =>
+      apiFetch(`/api/v1/patients/${id}`).then((r) =>
         r.ok ? r.json() : Promise.reject()
       ),
       loadRecords(),
@@ -96,10 +90,9 @@ export default function PatientDetail() {
     setAnalyzing(true);
     setAnalyzeError("");
     try {
-      const r = await fetch(`/api/v1/patients/${id}/records/text`, {
+      const r = await apiFetch(`/api/v1/patients/${id}/records/text`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, override, created_by: user?.name }),
+        body: JSON.stringify({ text, override }),
       });
       if (!r.ok) throw new Error("analysis failed");
       const result = (await r.json()) as AnalysisResult;
@@ -157,10 +150,10 @@ export default function PatientDetail() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
                   Allergies
                 </span>
-                {split(patient.allergies).length === 0 ? (
+                {patient.allergies.length === 0 ? (
                   <span className="text-xs text-slate-500">None</span>
                 ) : (
-                  split(patient.allergies).map((a) => (
+                  patient.allergies.map((a) => (
                     <span
                       className="rounded-full bg-red-100 px-3 py-0.5 text-xs font-medium text-red-700"
                       key={a}
@@ -175,10 +168,10 @@ export default function PatientDetail() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
                   Chronic Conditions
                 </span>
-                {split(patient.chronicConditions).length === 0 ? (
+                {patient.chronicConditions.length === 0 ? (
                   <span className="text-xs text-slate-500">None</span>
                 ) : (
-                  split(patient.chronicConditions).map((c) => (
+                  patient.chronicConditions.map((c) => (
                     <span
                       className="rounded-full bg-teal-100 px-3 py-0.5 text-xs font-medium text-teal-800"
                       key={c}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiFetch } from "../lib/api";
 
 type RiskItem = {
   title: string;
@@ -25,7 +26,7 @@ export default function TopRisks({ patientId }: { patientId: string }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`/api/v1/patients/${patientId}/risks`)
+    apiFetch(`/api/v1/patients/${patientId}/risks`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d: RiskSummary) => setRisks(d))
       .catch(() => setError("Unable to load risk summary."));
