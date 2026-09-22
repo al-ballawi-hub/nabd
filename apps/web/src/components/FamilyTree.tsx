@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
 import { useAuth } from "../context/auth";
-import { apiFetch } from "../lib/api";
+import { apiFetch, type Page } from "../lib/api";
 
 type FamilyMember = {
   id: number;
@@ -37,45 +38,56 @@ const split = (s: string) =>
 export default function FamilyTree({ patientId }: { patientId: string }) {
   const { user } = useAuth();
   const isDoctor = user?.role === "doctor";
+  const queryClient = useQueryClient();
 
-  const [members, setMembers] = useState<FamilyMember[]>([]);
-  const [error, setError] = useState("");
   const [relation, setRelation] = useState("");
   const [name, setName] = useState("");
   const [conditions, setConditions] = useState("");
 
-  const load = useCallback(() => {
-    apiFetch(`/api/v1/patients/${patientId}/family`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: FamilyMember[]) => setMembers(d))
-      .catch(() => setError("Unable to load family history."));
-  }, [patientId]);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["family", patientId],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/v1/patients/${patientId}/family`);
+      if (!r.ok) throw new Error("Failed to load family history");
+      return (await r.json()) as Page<FamilyMember>;
+    },
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const addMember = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!relation.trim()) return;
-    const r = await apiFetch(`/api/v1/patients/${patientId}/family`, {
-      method: "POST",
-      body: JSON.stringify({ relation, name, conditions }),
-    });
-    if (r.ok) {
+  const addMutation = useMutation({
+    mutationFn: async (vars: {
+      relation: string;
+      name: string;
+      conditions: string;
+    }) => {
+      const r = await apiFetch(`/api/v1/patients/${patientId}/family`, {
+        method: "POST",
+        body: JSON.stringify(vars),
+      });
+      if (!r.ok) throw new Error("Failed to add family member");
+    },
+    onSuccess: () => {
       setRelation("");
       setName("");
       setConditions("");
-      load();
-    }
+      queryClient.invalidateQueries({ queryKey: ["family", patientId] });
+    },
+  });
+
+  const addMember = (e: FormEvent) => {
+    e.preventDefault();
+    if (!relation.trim()) return;
+    addMutation.mutate({ relation, name, conditions });
   };
+
+  const members = data?.items ?? [];
 
   return (
     <div className="rounded-3xl border border-white/50 bg-white/80 p-6 shadow-xl shadow-teal-900/5 backdrop-blur-md">
       <h2 className="text-lg font-bold text-slate-800">Family Medical History</h2>
-      {error && <p className="mt-2 text-red-600">{error}</p>}
+      {isError && <p className="mt-2 text-red-600">Unable to load family history.</p>}
+      {isLoading && <p className="mt-2 text-slate-600">Loading…</p>}
 
-      {members.length === 0 && !error && (
+      {!isLoading && !isError && members.length === 0 && (
         <p className="mt-2 text-slate-600">No family history recorded.</p>
       )}
 
@@ -112,9 +124,8 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
                             : "bg-slate-100 text-slate-700"
                         }`}
                       >
-                        {flagged.length > 0 && HEREDITARY_FLAGS.some((f) =>
-                          c.toLowerCase().includes(f)
-                        )
+                        {flagged.length > 0 &&
+                        HEREDITARY_FLAGS.some((f) => c.toLowerCase().includes(f))
                           ? "⚠️ "
                           : ""}
                         {c}
@@ -162,9 +173,9 @@ export default function FamilyTree({ patientId }: { patientId: string }) {
           <button
             type="submit"
             className="mt-3 rounded-2xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow transition hover:bg-teal-700 active:scale-95 disabled:opacity-60"
-            disabled={!relation.trim()}
+            disabled={!relation.trim() || addMutation.isPending}
           >
-            Add Member
+            {addMutation.isPending ? "Adding…" : "Add Member"}
           </button>
         </form>
       )}

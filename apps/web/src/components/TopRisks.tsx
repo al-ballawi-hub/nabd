@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api";
 
 type RiskItem = {
@@ -22,24 +22,23 @@ const LEVEL_STYLES: Record<string, string> = {
 };
 
 export default function TopRisks({ patientId }: { patientId: string }) {
-  const [risks, setRisks] = useState<RiskSummary | null>(null);
-  const [error, setError] = useState("");
+  const { data: risks, isLoading, isError } = useQuery({
+    queryKey: ["risks", patientId],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/v1/patients/${patientId}/risks`);
+      if (!r.ok) throw new Error("Failed to load risk summary");
+      return (await r.json()) as RiskSummary;
+    },
+  });
 
-  useEffect(() => {
-    apiFetch(`/api/v1/patients/${patientId}/risks`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: RiskSummary) => setRisks(d))
-      .catch(() => setError("Unable to load risk summary."));
-  }, [patientId]);
-
-  if (error) {
+  if (isError) {
     return (
       <div className="rounded-3xl border border-white/50 bg-white/80 p-6 backdrop-blur-md">
-        <p className="text-red-600">{error}</p>
+        <p className="text-red-600">Unable to load risk summary.</p>
       </div>
     );
   }
-  if (!risks) {
+  if (isLoading || !risks) {
     return (
       <div className="rounded-3xl border border-white/50 bg-white/80 p-6 backdrop-blur-md">
         <p className="text-slate-600">Loading risk summary…</p>

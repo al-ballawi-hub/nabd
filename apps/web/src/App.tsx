@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import TopNav from "./components/TopNav";
 import { useAuth } from "./context/auth";
-import { apiFetch } from "./lib/api";
+import { apiFetch, type Page } from "./lib/api";
 
 type Patient = {
   id: number;
@@ -17,35 +17,26 @@ type Patient = {
 export default function App() {
   const { user } = useAuth();
   const isDoctor = user?.role === "doctor";
+  const queryClient = useQueryClient();
 
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["patients"],
+    queryFn: async () => {
+      const r = await apiFetch("/api/v1/patients");
+      if (!r.ok) throw new Error("Failed to load patients");
+      return (await r.json()) as Page<Patient>;
+    },
+  });
 
-  const load = useCallback(() => {
-    setLoading(true);
-    apiFetch("/api/v1/patients")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d: Patient[]) => {
-        setPatients(d);
-        setError("");
-        setLoading(false);
-      })
-      .catch(() => {
-        setError(
-          "Unable to reach the server — please make sure the API is running on port 8000."
-        );
-        setLoading(false);
-      });
-  }, []);
+  const seedMutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiFetch("/api/v1/seed", { method: "POST" });
+      if (!r.ok) throw new Error("Failed to generate demo data");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["patients"] }),
+  });
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const seed = () => {
-    apiFetch("/api/v1/seed", { method: "POST" }).then(load);
-  };
+  const patients = data?.items ?? [];
 
   return (
     <div className="min-h-screen">
@@ -63,21 +54,22 @@ export default function App() {
           </div>
           {isDoctor && (
             <button
-              className="rounded-2xl bg-white/90 px-6 py-3 font-semibold text-teal-700 shadow-xl shadow-teal-900/20 backdrop-blur transition-transform hover:-translate-y-0.5 active:scale-95"
-              onClick={seed}
+              className="rounded-2xl bg-white/90 px-6 py-3 font-semibold text-teal-700 shadow-xl shadow-teal-900/20 backdrop-blur transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isPending}
             >
-              Generate Demo Data
+              {seedMutation.isPending ? "Generating…" : "Generate Demo Data"}
             </button>
           )}
         </div>
 
-        {loading && <p className="font-medium text-teal-50">Loading…</p>}
-        {error && (
+        {isLoading && <p className="font-medium text-teal-50">Loading…</p>}
+        {isError && (
           <p className="rounded-xl bg-red-500/20 px-4 py-3 text-red-100">
-            {error}
+            {error instanceof Error ? error.message : "Something went wrong."}
           </p>
         )}
-        {!loading && !error && patients.length === 0 && (
+        {!isLoading && !isError && patients.length === 0 && (
           <p className="font-medium text-teal-50">
             No data yet — press "Generate Demo Data".
           </p>

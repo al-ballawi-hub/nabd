@@ -2,6 +2,13 @@ import { SESSION_STORAGE_KEY } from "../context/auth";
 
 type Session = { user: { name: string; role: string }; token: string };
 
+export type Page<T> = {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export function getToken(): string | null {
   try {
     const saved = localStorage.getItem(SESSION_STORAGE_KEY);

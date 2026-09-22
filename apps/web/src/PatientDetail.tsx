@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import FamilyTree from "./components/FamilyTree";
 import TopNav from "./components/TopNav";
 import TopRisks from "./components/TopRisks";
 import { useAuth } from "./context/auth";
-import { apiFetch } from "./lib/api";
+import { apiFetch, type Page } from "./lib/api";
 
 type Patient = {
   id: number;
@@ -48,70 +49,58 @@ export default function PatientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const isDoctor = user?.role === "doctor";
-
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [records, setRecords] = useState<MedicalRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
 
   const [text, setText] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState("");
   const [safetyWarnings, setSafetyWarnings] = useState<string[]>([]);
 
-  const loadRecords = useCallback(async () => {
-    const r = await apiFetch(`/api/v1/patients/${id}/records`);
-    if (!r.ok) throw new Error("failed to load records");
-    return (await r.json()) as MedicalRecord[];
-  }, [id]);
+  const patientQuery = useQuery({
+    queryKey: ["patient", id],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/v1/patients/${id}`);
+      if (!r.ok) throw new Error("Failed to load patient");
+      return (await r.json()) as Patient;
+    },
+  });
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      apiFetch(`/api/v1/patients/${id}`).then((r) =>
-        r.ok ? r.json() : Promise.reject()
-      ),
-      loadRecords(),
-    ])
-      .then(([p, recs]) => {
-        setPatient(p);
-        setRecords(recs);
-        setError("");
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Unable to load patient data.");
-        setLoading(false);
-      });
-  }, [id, loadRecords]);
+  const recordsQuery = useQuery({
+    queryKey: ["records", id],
+    queryFn: async () => {
+      const r = await apiFetch(`/api/v1/patients/${id}/records`);
+      if (!r.ok) throw new Error("Failed to load records");
+      return (await r.json()) as Page<MedicalRecord>;
+    },
+  });
 
-  const handleAnalyze = async (override = false) => {
-    if (!text.trim()) return;
-    setAnalyzing(true);
-    setAnalyzeError("");
-    try {
+  const analyzeMutation = useMutation({
+    mutationFn: async (vars: { text: string; override: boolean }) => {
       const r = await apiFetch(`/api/v1/patients/${id}/records/text`, {
         method: "POST",
-        body: JSON.stringify({ text, override }),
+        body: JSON.stringify(vars),
       });
-      if (!r.ok) throw new Error("analysis failed");
-      const result = (await r.json()) as AnalysisResult;
+      if (!r.ok) throw new Error("Analysis failed");
+      return (await r.json()) as AnalysisResult;
+    },
+    onSuccess: (result) => {
       if (result.saved) {
-        setSafetyWarnings([]);
         setText("");
-        const recs = await loadRecords();
-        setRecords(recs);
+        setSafetyWarnings([]);
+        queryClient.invalidateQueries({ queryKey: ["records", id] });
       } else {
         setSafetyWarnings(result.warnings ?? []);
       }
-    } catch {
-      setAnalyzeError(
-        "Text analysis failed — please ensure the server is running."
-      );
-    } finally {
-      setAnalyzing(false);
-    }
+    },
+  });
+
+  const handleAnalyze = (override = false) => {
+    if (!text.trim()) return;
+    analyzeMutation.mutate({ text, override });
   };
+
+  const patient = patientQuery.data;
+  const records = recordsQuery.data?.items ?? [];
+  const loading = patientQuery.isLoading || recordsQuery.isLoading;
+  const error = patientQuery.error ?? recordsQuery.error;
 
   return (
     <div className="min-h-screen">
@@ -121,7 +110,7 @@ export default function PatientDetail() {
         {loading && <p className="font-medium text-teal-50">Loading…</p>}
         {error && (
           <p className="rounded-xl bg-red-500/20 px-4 py-3 text-red-100">
-            {error}
+            {error instanceof Error ? error.message : "Unable to load patient data."}
           </p>
         )}
 
@@ -208,9 +197,9 @@ export default function PatientDetail() {
                   <button
                     className="rounded-2xl bg-red-600 px-5 py-2.5 font-semibold text-white shadow-lg shadow-red-600/30 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => handleAnalyze(true)}
-                    disabled={analyzing}
+                    disabled={analyzeMutation.isPending}
                   >
-                    {analyzing ? "Saving…" : "Override & Approve"}
+                    {analyzeMutation.isPending ? "Saving…" : "Override & Approve"}
                   </button>
                   <button
                     className="rounded-2xl bg-white px-5 py-2.5 font-semibold text-slate-600 shadow transition-transform hover:-translate-y-0.5 active:scale-95"
@@ -245,12 +234,14 @@ export default function PatientDetail() {
                 <button
                   className="mt-3 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-teal-900/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => handleAnalyze(false)}
-                  disabled={analyzing || !text.trim()}
+                  disabled={analyzeMutation.isPending || !text.trim()}
                 >
-                  {analyzing ? "Analyzing…" : "Analyze Text"}
+                  {analyzeMutation.isPending ? "Analyzing…" : "Analyze Text"}
                 </button>
-                {analyzeError && (
-                  <p className="mt-2 text-sm text-red-600">{analyzeError}</p>
+                {analyzeMutation.isError && (
+                  <p className="mt-2 text-sm text-red-600">
+                    Text analysis failed — please ensure the server is running.
+                  </p>
                 )}
               </div>
             )}
