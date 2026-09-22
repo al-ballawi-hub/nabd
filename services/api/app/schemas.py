@@ -1,6 +1,7 @@
 from datetime import date
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -20,8 +21,15 @@ class PatientOut(ORMModel):
     age: int | None
     gender: str | None
     blood_type: str | None
-    allergies: str
-    chronic_conditions: str
+    allergies: list[str]
+    chronic_conditions: list[str]
+
+    @field_validator("allergies", "chronic_conditions", mode="before")
+    @classmethod
+    def _to_names(cls, value):
+        if isinstance(value, list):
+            return [getattr(x, "name", x) for x in value]
+        return value
 
 
 class RecordOut(ORMModel):
@@ -38,7 +46,6 @@ class RecordOut(ORMModel):
 class RecordTextIn(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     override: bool = False
-    created_by: str | None = Field(default=None, max_length=120)
 
 
 class RecordTextResult(BaseModel):
@@ -49,6 +56,18 @@ class RecordTextResult(BaseModel):
     record_type: str
     title: str
     content: str
+
+
+class LoginIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    role: Literal["doctor", "patient"]
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str
+    name: str
+    role: str
 
 
 class FamilyMemberOut(ORMModel):
@@ -63,12 +82,12 @@ class FamilyMemberOut(ORMModel):
 
 
 class FamilyMemberIn(BaseModel):
-    relation: str
-    name: str | None = None
-    gender: str | None = None
+    relation: str = Field(min_length=1, max_length=50)
+    name: str | None = Field(default=None, max_length=120)
+    gender: str | None = Field(default=None, max_length=10)
     age: int | None = None
     deceased: bool = False
-    conditions: str = ""
+    conditions: str = Field(default="", max_length=500)
 
 
 class RiskItem(BaseModel):

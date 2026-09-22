@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.core.config import settings
+from app.core.security import create_access_token, get_current_user, require_doctor
 from app.db import get_db, init_db
 from app.seed import run_seed
 from app.services.ai_service import analyze_medical_text
 from app.services.risk_service import summarize_risks
-from app.services.safety_service import check_duplicate_lab, check_record_safety
+from app.services.safety_service import check_duplicate_lab
 
 
 @asynccontextmanager
@@ -31,23 +32,44 @@ app.add_middleware(
 )
 
 
+@app.post("/api/v1/auth/login", response_model=schemas.TokenOut)
+def login(payload: schemas.LoginIn):
+    token = create_access_token(payload.name, payload.role)
+    return schemas.TokenOut(
+        access_token=token,
+        token_type="bearer",
+        name=payload.name,
+        role=payload.role,
+    )
+
+
 @app.get("/api/v1/health")
 def health() -> dict:
     return {"status": "ok", "service": "nabd"}
 
 
 @app.post("/api/v1/seed")
-def seed(db: Session = Depends(get_db)) -> dict:
+def seed(
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_doctor),
+) -> dict:
     return run_seed(db)
 
 
 @app.get("/api/v1/patients", response_model=list[schemas.PatientOut])
-def list_patients(db: Session = Depends(get_db)):
+def list_patients(
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
     return db.query(models.Patient).all()
 
 
 @app.get("/api/v1/patients/{patient_id}", response_model=schemas.PatientOut)
-def get_patient(patient_id: int, db: Session = Depends(get_db)):
+def get_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -55,7 +77,11 @@ def get_patient(patient_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/patients/{patient_id}/records", response_model=list[schemas.RecordOut])
-def get_records(patient_id: int, db: Session = Depends(get_db)):
+def get_records(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
     return (
         db.query(models.MedicalRecord)
         .filter(models.MedicalRecord.patient_id == patient_id)
@@ -72,6 +98,7 @@ def create_record_from_text(
     payload: schemas.RecordTextIn,
     response: Response,
     db: Session = Depends(get_db),
+    user: dict = Depends(require_doctor),
 ):
     patient = (
         db.query(models.Patient).filter(models.Patient.id == patient_id).first()
@@ -81,15 +108,18 @@ def create_record_from_text(
 
     try:
         # PRIVACY: raw medical text is passed to the AI service but never logged.
-        analysis = analyze_medical_text(payload.text)
+        analysis = analyze_medical_text(
+            payload.text,
+            allergies=[a.name for a in patient.allergies],
+            conditions=[c.name for c in patient.chronic_conditions],
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail="Text analysis failed — AI service unavailable",
         ) from exc
 
-    # PRIVACY: safety check reads the patient profile but never logs it.
-    warnings = check_record_safety(patient, payload.text, analysis["content"])
+    warnings = list(analysis.get("conflicts", []))
     warnings += check_duplicate_lab(
         db,
         patient_id,
@@ -108,6 +138,7 @@ def create_record_from_text(
             content=analysis["content"],
         )
 
+    # created_by is taken from the verified JWT, never from the request body.
     record = models.MedicalRecord(
         patient_id=patient_id,
         record_type=analysis["record_type"],
@@ -115,11 +146,15 @@ def create_record_from_text(
         content=analysis["content"],
         source="manual",
         record_date=date.today(),
-        created_by=payload.created_by,
+        created_by=user["name"],
     )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    try:
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save record") from exc
 
     response.status_code = status.HTTP_201_CREATED
     return schemas.RecordTextResult(
@@ -132,7 +167,11 @@ def create_record_from_text(
 
 
 @app.get("/api/v1/patients/{patient_id}/risks", response_model=schemas.RiskSummary)
-def get_patient_risks(patient_id: int, db: Session = Depends(get_db)):
+def get_patient_risks(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
     patient = (
         db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     )
@@ -156,7 +195,11 @@ def get_patient_risks(patient_id: int, db: Session = Depends(get_db)):
     "/api/v1/patients/{patient_id}/family",
     response_model=list[schemas.FamilyMemberOut],
 )
-def list_family(patient_id: int, db: Session = Depends(get_db)):
+def list_family(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
     return (
         db.query(models.FamilyMember)
         .filter(models.FamilyMember.patient_id == patient_id)
@@ -173,6 +216,7 @@ def add_family_member(
     patient_id: int,
     payload: schemas.FamilyMemberIn,
     db: Session = Depends(get_db),
+    _user: dict = Depends(require_doctor),
 ):
     patient = (
         db.query(models.Patient).filter(models.Patient.id == patient_id).first()
@@ -181,7 +225,12 @@ def add_family_member(
         raise HTTPException(status_code=404, detail="Patient not found")
 
     member = models.FamilyMember(patient_id=patient_id, **payload.model_dump())
-    db.add(member)
-    db.commit()
-    db.refresh(member)
+    try:
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save family member") from exc
+
     return member

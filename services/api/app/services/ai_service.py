@@ -1,7 +1,9 @@
 """DeepSeek-powered analysis of raw medical text.
 
-Turns free-text medical notes into a structured record with a title, a
-record type (lab | prescription | report | scan) and a concise summary.
+Produces a structured record AND context-aware safety conflicts in a single
+call. Safety reasoning (including medical negation such as "no history of
+asthma") is delegated to the LLM with a strict structured prompt — there is no
+naive substring/negation heuristic in the codebase.
 
 The AI reply is parsed defensively (markdown fences tolerated, malformed JSON
 never crashes) and validated against a Pydantic schema. External API calls are
@@ -32,8 +34,8 @@ from app.core.config import settings
 VALID_RECORD_TYPES = {"lab", "prescription", "report", "scan"}
 
 _SYSTEM_PROMPT = (
-    "You are a clinical documentation assistant. Analyze the medical text and "
-    "respond with a single JSON object and nothing else."
+    "You are a clinical documentation assistant with a strong focus on patient "
+    "safety. Respond with a single JSON object and nothing else."
 )
 
 _RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
@@ -45,6 +47,7 @@ class AnalysisResult(BaseModel):
     title: str = Field(default="Medical Note", max_length=200)
     record_type: str = "report"
     content: str = Field(default="", max_length=5000)
+    conflicts: list[str] = Field(default_factory=list)
 
     @field_validator("record_type")
     @classmethod
@@ -52,8 +55,14 @@ class AnalysisResult(BaseModel):
         return value if value in VALID_RECORD_TYPES else "report"
 
 
-def _mock_analysis(text: str) -> dict:
-    """Deterministic fallback used when no DeepSeek API key is configured."""
+def _mock_analysis(text: str, allergies: list[str]) -> dict:
+    """Deterministic offline fallback (no API key).
+
+    This is intentionally minimal and is only used for local development and
+    automated tests. It performs a plain allergy-name lookup — it does NOT
+    attempt negation handling, which is the LLM's responsibility on the live
+    path.
+    """
     t = text.lower()
     if any(k in t for k in ("lab", "blood", "glucose", "hba1c", "creatinine", "cbc", "hemoglobin")):
         record_type = "lab"
@@ -67,10 +76,17 @@ def _mock_analysis(text: str) -> dict:
     else:
         record_type = "report"
 
+    conflicts = [
+        f"'{a}' may trigger the patient's {a} allergy."
+        for a in allergies
+        if a.lower() in t
+    ]
+
     return {
         "title": "Medical Note Summary (Mock)",
         "record_type": record_type,
         "content": text.strip()[:5000],
+        "conflicts": conflicts,
     }
 
 
@@ -96,13 +112,22 @@ def _call_deepseek(client: OpenAI, model: str, messages: list[dict]) -> Any:
     )
 
 
-def analyze_medical_text(text: str) -> dict:
-    """Return ``{title, record_type, content}`` for the given medical text.
+def analyze_medical_text(
+    text: str,
+    allergies: list[str] | None = None,
+    conditions: list[str] | None = None,
+) -> dict:
+    """Return ``{title, record_type, content, conflicts}`` for the text.
 
-    Falls back to a deterministic mock when no API key is configured.
+    The LLM is given the patient's allergies and chronic conditions and asked
+    to flag safety conflicts while respecting medical negation. Falls back to a
+    deterministic mock when no API key is configured.
     """
+    allergies = allergies or []
+    conditions = conditions or []
+
     if not settings.deepseek_api_key:
-        return _mock_analysis(text)
+        return _mock_analysis(text, allergies)
 
     client = OpenAI(
         api_key=settings.deepseek_api_key,
@@ -110,11 +135,20 @@ def analyze_medical_text(text: str) -> dict:
     )
 
     user_prompt = (
-        "Analyze the following medical text and respond with JSON only "
-        "(no extra text) using these keys:\n"
-        '- "title": a short title in English\n'
+        "Analyze the medical text and produce a structured result.\n\n"
+        "PATIENT CONTEXT:\n"
+        f"- Allergies: {', '.join(allergies) or 'none reported'}\n"
+        f"- Chronic conditions: {', '.join(conditions) or 'none reported'}\n\n"
+        "Return JSON only with these keys:\n"
+        '- "title": a short English title\n'
         '- "record_type": exactly one of: lab, prescription, report, scan\n'
-        '- "content": a concise medical summary in English\n\n'
+        '- "content": a concise English medical summary\n'
+        '- "conflicts": an array of strings describing any safety conflicts '
+        "between the text and the patient's allergies or conditions. Empty "
+        "array if none.\n\n"
+        "CRITICAL negation rule: respect medical negation. Phrases such as "
+        '"no history of asthma", "denies penicillin allergy", "not allergic to '
+        'X", or "no known drug allergies" mean there is NO conflict.\n\n'
         f"Medical text:\n{text}"
     )
 

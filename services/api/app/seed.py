@@ -5,36 +5,37 @@ from sqlalchemy.orm import Session
 
 from app import models
 
+# Allergies and chronic conditions are normalized lists (many-to-many).
 PATIENTS = [
     {
         "name": "Ahmed Mohammed Al-Otaibi",
         "age": 54, "gender": "Male", "blood_type": "O+",
-        "allergies": "Penicillin",
-        "chronic_conditions": "Type 2 Diabetes, Hypertension",
+        "allergies": ["Penicillin"],
+        "chronic_conditions": ["Type 2 Diabetes", "Hypertension"],
     },
     {
         "name": "Noura Saad Al-Qahtani",
         "age": 41, "gender": "Female", "blood_type": "A+",
-        "allergies": "None",
-        "chronic_conditions": "Asthma",
+        "allergies": [],
+        "chronic_conditions": ["Asthma"],
     },
     {
         "name": "Khalid Abdullah Al-Dosari",
         "age": 67, "gender": "Male", "blood_type": "B+",
-        "allergies": "Aspirin, Nuts",
-        "chronic_conditions": "Heart Failure, Type 2 Diabetes",
+        "allergies": ["Aspirin", "Nuts"],
+        "chronic_conditions": ["Heart Failure", "Type 2 Diabetes"],
     },
     {
         "name": "Sara Faisal Al-Harbi",
         "age": 29, "gender": "Female", "blood_type": "AB+",
-        "allergies": "None",
-        "chronic_conditions": "None",
+        "allergies": [],
+        "chronic_conditions": [],
     },
     {
         "name": "Mohammed Ali Al-Ghamdi",
         "age": 73, "gender": "Male", "blood_type": "O-",
-        "allergies": "NSAIDs",
-        "chronic_conditions": "Hypertension, Osteoarthritis",
+        "allergies": ["NSAIDs"],
+        "chronic_conditions": ["Hypertension", "Osteoarthritis"],
     },
 ]
 
@@ -83,7 +84,6 @@ RECORDS = {
     ],
 }
 
-
 # Family members: patient name -> list of relatives (for the medical family tree)
 FAMILY = {
     "Ahmed Mohammed Al-Otaibi": [
@@ -105,20 +105,45 @@ FAMILY = {
 }
 
 
+def _get_or_create(db: Session, model: type, name: str):
+    obj = db.query(model).filter(model.name == name).first()
+    if not obj:
+        obj = model(name=name)
+        db.add(obj)
+        db.flush()
+    return obj
+
+
 def run_seed(db: Session) -> dict:
     if db.query(models.Patient).count() > 0:
         return {"message": "Demo data already exists", "seeded": False}
 
     for p in PATIENTS:
-        patient = models.Patient(**p)
+        patient = models.Patient(
+            name=p["name"],
+            age=p["age"],
+            gender=p["gender"],
+            blood_type=p["blood_type"],
+        )
         db.add(patient)
         db.flush()
+
+        for name in p["allergies"]:
+            patient.allergies.append(_get_or_create(db, models.Allergy, name))
+        for name in p["chronic_conditions"]:
+            patient.chronic_conditions.append(_get_or_create(db, models.Condition, name))
+
         for r in RECORDS.get(p["name"], []):
             db.add(models.MedicalRecord(patient_id=patient.id, **r))
         for f in FAMILY.get(p["name"], []):
             db.add(models.FamilyMember(patient_id=patient.id, **f))
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     return {
         "message": "Demo data generated (completely fictional)",
         "seeded": True,

@@ -36,8 +36,8 @@ def summarize_risks(
     records: list[models.MedicalRecord],
     family: list[models.FamilyMember],
 ) -> dict:
-    chronic = _split(patient.chronic_conditions)
-    allergies = _split(patient.allergies)
+    allergies = [a.name for a in patient.allergies]
+    chronic = [c.name for c in patient.chronic_conditions]
 
     abnormal_labs = []
     for rec in records:
@@ -59,7 +59,12 @@ def summarize_risks(
                     f"{member.relation.title()}: {condition} ({status})"
                 )
 
-    score = len(chronic) * 2 + len(abnormal_labs) * 2 + len(hereditary_risks) + len(allergies)
+    score = (
+        len(chronic) * 2
+        + len(abnormal_labs) * 2
+        + len(hereditary_risks)
+        + len(allergies)
+    )
     if score >= 7:
         risk_level = "high"
     elif score >= 3:
