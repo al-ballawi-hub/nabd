@@ -6,9 +6,9 @@ type Patient = {
   name: string;
   age: number | null;
   gender: string | null;
-  blood_type: string | null;
+  bloodType: string | null;
   allergies: string;
-  chronic_conditions: string;
+  chronicConditions: string;
 };
 
 export default function App() {
@@ -62,7 +62,7 @@ export default function App() {
             <Link className="card card-link" to={`/patients/${p.id}`} key={p.id}>
               <h2>{p.name}</h2>
               <p className="muted">
-                {p.age} سنة · {p.gender} · فصيلة الدم {p.blood_type}
+                {p.age} سنة · {p.gender} · فصيلة الدم {p.bloodType}
               </p>
               <div className="section">
                 <span className="label">الحساسية:</span>
@@ -72,7 +72,7 @@ export default function App() {
               </div>
               <div className="section">
                 <span className="label">أمراض مزمنة:</span>
-                {split(p.chronic_conditions).map((c) => (
+                {split(p.chronicConditions).map((c) => (
                   <span className="chip" key={c}>{c}</span>
                 ))}
               </div>

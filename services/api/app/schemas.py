@@ -1,9 +1,20 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
-class PatientOut(BaseModel):
+class ORMModel(BaseModel):
+    """Base schema that maps SQLAlchemy attributes to camelCase JSON."""
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
+class PatientOut(ORMModel):
     id: int
     name: str
     age: int | None
@@ -12,10 +23,8 @@ class PatientOut(BaseModel):
     allergies: str
     chronic_conditions: str
 
-    model_config = {"from_attributes": True}
 
-
-class RecordOut(BaseModel):
+class RecordOut(ORMModel):
     id: int
     patient_id: int
     record_type: str
@@ -23,5 +32,3 @@ class RecordOut(BaseModel):
     content: str
     source: str
     record_date: date | None
-
-    model_config = {"from_attributes": True}

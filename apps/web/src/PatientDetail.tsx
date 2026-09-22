@@ -6,19 +6,19 @@ type Patient = {
   name: string;
   age: number | null;
   gender: string | null;
-  blood_type: string | null;
+  bloodType: string | null;
   allergies: string;
-  chronic_conditions: string;
+  chronicConditions: string;
 };
 
 type MedicalRecord = {
   id: number;
-  patient_id: number;
-  record_type: string;
+  patientId: number;
+  recordType: string;
   title: string;
   content: string;
   source: string;
-  record_date: string | null;
+  recordDate: string | null;
 };
 
 const RECORD_TYPES: Record<string, { label: string; className: string }> = {
@@ -81,7 +81,7 @@ export default function PatientDetail() {
               <h2>{patient.name}</h2>
               <p className="muted">
                 {patient.age} سنة · {patient.gender} · فصيلة الدم{" "}
-                {patient.blood_type}
+                {patient.bloodType}
               </p>
               <div className="section">
                 <span className="label">الحساسية:</span>
@@ -93,7 +93,7 @@ export default function PatientDetail() {
               </div>
               <div className="section">
                 <span className="label">أمراض مزمنة:</span>
-                {split(patient.chronic_conditions).map((c) => (
+                {split(patient.chronicConditions).map((c) => (
                   <span className="chip" key={c}>
                     {c}
                   </span>
@@ -108,8 +108,8 @@ export default function PatientDetail() {
 
             <div className="records">
               {records.map((r) => {
-                const t = RECORD_TYPES[r.record_type] ?? {
-                  label: r.record_type,
+                const t = RECORD_TYPES[r.recordType] ?? {
+                  label: r.recordType,
                   className: "chip",
                 };
                 return (
@@ -120,7 +120,7 @@ export default function PatientDetail() {
                     </div>
                     <p className="record-content">{r.content}</p>
                     <p className="muted record-meta">
-                      {r.record_date ?? "بدون تاريخ"} · المصدر:{" "}
+                      {r.recordDate ?? "بدون تاريخ"} · المصدر:{" "}
                       {r.source === "ocr" ? "مسح ضوئي (OCR)" : "إدخال يدوي"}
                     </p>
                   </div>
